@@ -72,3 +72,31 @@ function generateFallbackSynonyms(word: string): string[] {
 
   return commonMap[clean] || [word];
 }
+
+/**
+ * Builds diff spans piece-by-piece (e.g. per chunk or batch) and joins them with the original
+ * layout text. Diffing small aligned pieces is far cheaper than one whole-document diff, which
+ * can block the event loop for a long time on large, heavily rewritten documents.
+ */
+export function generateDiffSpansForPairs(
+  pairs: Array<{ original: string; rewritten: string; after: string }>,
+  leading = ''
+): DiffSpan[] {
+  const spans: DiffSpan[] = [];
+  if (leading) spans.push({ value: leading, type: 'unchanged' });
+  for (const pair of pairs) {
+    spans.push(...generateDiffSpans(pair.original, pair.rewritten));
+    if (pair.after) spans.push({ value: pair.after, type: 'unchanged' });
+  }
+  // Merge adjacent unchanged spans to keep payloads small
+  const merged: DiffSpan[] = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last && last.type === 'unchanged' && span.type === 'unchanged') {
+      last.value += span.value;
+    } else {
+      merged.push({ ...span });
+    }
+  }
+  return merged;
+}

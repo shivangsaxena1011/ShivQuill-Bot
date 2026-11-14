@@ -1,5 +1,7 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import crypto from 'crypto';
+import { config } from '../config.js';
 import {
   AiDetectionResponse,
   AiDetectionSentence,
@@ -7,8 +9,41 @@ import {
   CitationResponse
 } from '../types.js';
 import { defaultCorpusManager } from '../corpus.js';
+import { formatCitation, parseAuthorName, CitationSource, CitationAuthor } from '../citation.js';
 
 export const originalityRouter = Router();
+
+/**
+ * Timing-safe authentication middleware for corpus administration
+ */
+function verifyCorpusAdminAuth(req: Request, res: Response, next: NextFunction) {
+  const configuredKey = config.corpusAdminApiKey;
+  if (!configuredKey) {
+    return res.status(503).json({
+      error: 'Corpus administration is disabled. Configure CORPUS_ADMIN_KEY in environment to enable index mutations.'
+    });
+  }
+
+  const authHeader = req.headers['authorization'] || req.headers['x-admin-key'];
+  let providedKey = '';
+
+  if (typeof authHeader === 'string') {
+    providedKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
+  }
+
+  if (!providedKey) {
+    return res.status(401).json({ error: 'Unauthorized: Missing corpus administration key.' });
+  }
+
+  const keyBuffer = Buffer.from(providedKey);
+  const targetBuffer = Buffer.from(configuredKey);
+
+  if (keyBuffer.length !== targetBuffer.length || !crypto.timingSafeEqual(keyBuffer, targetBuffer)) {
+    return res.status(403).json({ error: 'Forbidden: Invalid corpus administration key.' });
+  }
+
+  return next();
+}
 
 // ----------------------------------------------------
 // 1. AI Detector Endpoint (Experimental Statistical Linguistic Analyzer)
@@ -86,7 +121,7 @@ originalityRouter.post('/detector', (req: Request, res: Response) => {
           : 'Likely Human-Written',
       sentences: sentenceScores,
       metrics: {
-        perplexityScore: Math.round(Math.min(100, entropy * 15)),
+        entropyScore: Math.round(Math.min(100, entropy * 15)),
         burstinessScore: Math.round(Math.min(100, cv * 100)),
         shannonEntropy: parseFloat(entropy.toFixed(3)),
         sentenceLengthCV: parseFloat(cv.toFixed(3)),
@@ -127,7 +162,9 @@ originalityRouter.post('/plagiarism', (req: Request, res: Response) => {
       matchedSegments: result.matchedSegments.map(s => ({
         text: s.text,
         sourceTitle: s.sourceTitle,
-        sourceUrl: s.sourceUrl
+        sourceUrl: s.sourceUrl,
+        start: s.startInInput,
+        end: s.endInInput
       })),
       corpusStats: result.corpusStats
     };
@@ -150,20 +187,53 @@ originalityRouter.get('/corpus', (req: Request, res: Response) => {
   });
 });
 
-const indexDocumentSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  authorOrSource: z.string().min(1),
-  url: z.string().url(),
-  text: z.string().min(20)
+originalityRouter.get('/corpus/audit', verifyCorpusAdminAuth, (req: Request, res: Response) => {
+  res.json({
+    auditLogs: defaultCorpusManager.getAuditLogs()
+  });
 });
 
-originalityRouter.post('/corpus', (req: Request, res: Response) => {
+const indexDocumentSchema = z.object({
+  id: z.string().min(1, 'ID is required').max(100, 'ID cannot exceed 100 characters')
+    .regex(/^[a-zA-Z0-9_-]+$/, 'ID must contain only alphanumeric characters, underscores, and hyphens'),
+  title: z.string().min(1, 'Title is required').max(200, 'Title cannot exceed 200 characters'),
+  authorOrSource: z.string().min(1, 'Author/Source is required').max(200, 'Author cannot exceed 200 characters'),
+  url: z.string().url('Must be a valid URL').max(1000, 'URL too long')
+    .refine((val) => {
+      try {
+        const u = new URL(val);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+        const host = u.hostname.toLowerCase();
+        // SSRF prevention: reject localhost, loopback, link-local, and private RFC1918 subnets
+        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '169.254.169.254' || host === '::1') {
+          return false;
+        }
+        if (/^10\.\d+\.\d+\.\d+$/.test(host)) return false;
+        if (/^192\.168\.\d+\.\d+$/.test(host)) return false;
+        if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host)) return false;
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'URL must use HTTP/HTTPS and cannot target private or local networks'),
+  text: z.string().min(20, 'Text must be at least 20 characters').max(50000, 'Text cannot exceed 50,000 characters per document')
+});
+
+originalityRouter.post('/corpus', verifyCorpusAdminAuth, (req: Request, res: Response) => {
   try {
     const doc = indexDocumentSchema.parse(req.body);
-    defaultCorpusManager.indexDocument(doc);
+
+    // Duplicate title check for distinct IDs
+    const existingByTitle = defaultCorpusManager.findDocumentByTitle(doc.title);
+    if (existingByTitle && existingByTitle.id !== doc.id) {
+      return res.status(409).json({
+        error: `A document with the title '${doc.title}' already exists with ID '${existingByTitle.id}'.`
+      });
+    }
+
+    const action = defaultCorpusManager.indexDocument(doc);
     return res.json({
-      status: 'indexed',
+      status: action,
       documentId: doc.id,
       totalDocuments: defaultCorpusManager.getDocumentCount()
     });
@@ -186,7 +256,8 @@ const citationSchema = z.object({
   title: z.string().optional(),
   authors: z.array(z.string()).optional(),
   year: z.string().optional(),
-  publisher: z.string().optional(),
+  publisher: z.string().max(300).optional(),
+  containerTitle: z.string().max(300).optional(),
   volume: z.string().optional(),
   issue: z.string().optional(),
   pages: z.string().optional()
@@ -225,85 +296,71 @@ async function fetchCrossrefMetadata(doiQuery: string): Promise<any | null> {
 originalityRouter.post('/citation', async (req: Request, res: Response) => {
   try {
     const data = citationSchema.parse(req.body);
-    let resolvedTitle = data.title || '';
-    let resolvedAuthors = data.authors && data.authors.length > 0 ? data.authors : ['Anonymous'];
-    let resolvedYear = data.year || new Date().getFullYear().toString();
-    let resolvedPublisher = data.publisher || '';
+
+    const source: CitationSource = {
+      sourceType: data.sourceType,
+      title: data.title?.trim() || '',
+      authors: (data.authors || []).map(parseAuthorName).filter((a): a is CitationAuthor => a !== null),
+      year: data.year?.trim() || 'n.d.',
+      containerTitle: data.containerTitle?.trim() || undefined,
+      publisher: data.publisher?.trim() || undefined,
+      volume: data.volume?.trim() || undefined,
+      issue: data.issue?.trim() || undefined,
+      pages: data.pages?.trim() || undefined,
+      doi: data.doi?.trim() || undefined,
+      url: data.url?.trim() || undefined
+    };
+
     let isVerified = false;
     let sourceOrigin: 'crossref_doi' | 'user_supplied' = 'user_supplied';
-    let retrievedMetadata: any = undefined;
+    let retrievedMetadata: CitationResponse['retrievedMetadata'];
 
-    // Check for DOI resolution
     const targetDoi = data.doi || (data.url?.includes('doi.org/') ? data.url : undefined);
     if (targetDoi) {
-      const crossrefMeta = await fetchCrossrefMetadata(targetDoi);
-      if (crossrefMeta) {
+      const meta = await fetchCrossrefMetadata(targetDoi);
+      if (meta) {
         isVerified = true;
         sourceOrigin = 'crossref_doi';
-        retrievedMetadata = {
-          doi: crossrefMeta.DOI,
-          containerTitle: crossrefMeta['container-title']?.[0],
-          publishedDate: crossrefMeta.created?.['date-time'] || crossrefMeta.issued?.['date-parts']?.[0]?.[0]?.toString(),
-          publisher: crossrefMeta.publisher
-        };
+        if (meta.title?.[0]) source.title = meta.title[0];
+        if (Array.isArray(meta.author) && meta.author.length > 0) {
+          source.authors = meta.author
+            .map((a: any) => (a.family ? { family: a.family, given: a.given || '' } : a.name ? parseAuthorName(a.name) : null))
+            .filter(Boolean);
+        }
+        const year = meta.issued?.['date-parts']?.[0]?.[0] || meta.published?.['date-parts']?.[0]?.[0];
+        if (year) source.year = String(year);
+        if (meta['container-title']?.[0]) source.containerTitle = meta['container-title'][0];
+        if (meta.publisher) source.publisher = meta.publisher;
+        if (meta.volume) source.volume = String(meta.volume);
+        if (meta.issue) source.issue = String(meta.issue);
+        if (meta.page) source.pages = String(meta.page).replace('-', '–');
+        if (meta.DOI) source.doi = meta.DOI;
+        if (meta.type === 'journal-article') source.sourceType = 'journal';
+        else if (typeof meta.type === 'string' && meta.type.startsWith('book')) source.sourceType = 'book';
 
-        if (crossrefMeta.title?.[0]) resolvedTitle = crossrefMeta.title[0];
-        if (crossrefMeta.author && Array.isArray(crossrefMeta.author)) {
-          resolvedAuthors = crossrefMeta.author.map((a: any) => 
-            a.given && a.family ? `${a.given} ${a.family}` : a.family || a.name || 'Anonymous'
-          );
-        }
-        if (crossrefMeta.issued?.['date-parts']?.[0]?.[0]) {
-          resolvedYear = crossrefMeta.issued['date-parts'][0][0].toString();
-        }
-        if (crossrefMeta.publisher) resolvedPublisher = crossrefMeta.publisher;
+        retrievedMetadata = {
+          doi: meta.DOI,
+          containerTitle: source.containerTitle,
+          publishedDate: source.year,
+          publisher: meta.publisher
+        };
       }
     }
 
-    if (!resolvedTitle) {
-      resolvedTitle = 'Untitled Work';
-    }
+    if (!source.title) source.title = 'Untitled work';
 
-    const primaryAuthor = resolvedAuthors[0] || 'Anonymous';
-    const authorLastName = primaryAuthor.split(' ').pop() || primaryAuthor;
+    const { inTextCitation, fullBibliographyEntry } = formatCitation(data.style, source);
 
-    let inTextCitation = `(${authorLastName}, ${resolvedYear})`;
-    let fullBibliographyEntry = '';
-
-    const formattedAuthorsAPA = resolvedAuthors.length > 2 
-      ? `${authorLastName}, ${primaryAuthor.charAt(0)}., et al.`
-      : resolvedAuthors.map(a => `${a.split(' ').pop()}, ${a.charAt(0)}.`).join(', & ');
-
-    switch (data.style) {
-      case 'APA':
-        fullBibliographyEntry = `${formattedAuthorsAPA} (${resolvedYear}). *${resolvedTitle}*. ${resolvedPublisher ? resolvedPublisher + '. ' : ''}${data.url || ''}`.trim();
-        inTextCitation = resolvedAuthors.length > 2 ? `(${authorLastName} et al., ${resolvedYear})` : `(${authorLastName}, ${resolvedYear})`;
-        break;
-
-      case 'MLA':
-        fullBibliographyEntry = `${authorLastName}, ${primaryAuthor.split(' ')[0]}. "${resolvedTitle}." *${resolvedPublisher || 'Web Source'}*, ${resolvedYear}, ${data.url || ''}`.trim();
-        inTextCitation = `(${authorLastName})`;
-        break;
-
-      case 'Chicago':
-        fullBibliographyEntry = `${primaryAuthor}. ${resolvedYear}. "${resolvedTitle}." ${resolvedPublisher ? resolvedPublisher + '. ' : ''}${data.url || ''}`.trim();
-        inTextCitation = `(${authorLastName} ${resolvedYear})`;
-        break;
-
-      case 'Harvard':
-        fullBibliographyEntry = `${authorLastName}, ${primaryAuthor.charAt(0)}. (${resolvedYear}) '${resolvedTitle}', ${resolvedPublisher || 'Publication'}. Available at: ${data.url || 'Online'}`.trim();
-        inTextCitation = `(${authorLastName}, ${resolvedYear})`;
-        break;
-    }
-
-    const response: CitationResponse = {
+    const response: CitationResponse & { resolved: CitationSource } = {
       style: data.style,
       inTextCitation,
       fullBibliographyEntry,
-      sourceType: data.sourceType,
+      sourceType: source.sourceType,
       isVerified,
       sourceOrigin,
-      retrievedMetadata
+      retrievedMetadata,
+      // Structured fields so the UI can show/fill exactly what was used
+      resolved: source
     };
 
     return res.json(response);

@@ -33,6 +33,8 @@ export interface PlagiarismScanResult {
     title: string;
     authorOrSource: string;
     matchedPercent: number;
+    /** MinHash-estimated Jaccard similarity of the whole input vs. the whole source (0-100) */
+    documentSimilarity: number;
     matchedText: string;
   }[];
   matchedSegments: MatchedSegment[];
@@ -72,11 +74,27 @@ function hashString(str: string): number {
  * Tokenizes text into normalized word tokens
  */
 export function tokenizeWords(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 0);
+  return tokenizeWithOffsets(text).map(t => t.token);
+}
+
+export interface PositionedToken {
+  token: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Unicode-aware tokenizer (letters, marks and digits in any script) that keeps character
+ * offsets into the original text, so matches can be highlighted exactly.
+ */
+export function tokenizeWithOffsets(text: string): PositionedToken[] {
+  const tokens: PositionedToken[] = [];
+  const re = /[\p{L}\p{M}\p{N}_]+/gu;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    tokens.push({ token: m[0].toLowerCase(), start: m.index, end: m.index + m[0].length });
+  }
+  return tokens;
 }
 
 /**
@@ -129,21 +147,60 @@ export function estimateJaccardMinHash(sigA: number[], sigB: number[]): number {
   return matches / sigA.length;
 }
 
+export interface CorpusAuditLog {
+  timestamp: string;
+  action: 'indexed' | 'updated';
+  docId: string;
+  title: string;
+  wordCount: number;
+}
+
 /**
  * Modular Corpus Manager
  */
 export class CorpusIndexManager {
   private documents: Map<string, CorpusDocument> = new Map();
   private invertedShingleIndex: Map<string, Set<string>> = new Map(); // shingle -> documentIds
+  private auditLogs: CorpusAuditLog[] = [];
 
   constructor() {
     this.seedDefaultCorpus();
   }
 
+  public hasDocument(id: string): boolean {
+    return this.documents.has(id);
+  }
+
+  public findDocumentByTitle(title: string): CorpusDocument | undefined {
+    const normalized = title.trim().toLowerCase();
+    for (const doc of this.documents.values()) {
+      if (doc.title.trim().toLowerCase() === normalized) {
+        return doc;
+      }
+    }
+    return undefined;
+  }
+
   /**
-   * Adds or updates a document in the index
+   * Adds or updates a document in the index with stale shingle pruning and audit logging
    */
-  public indexDocument(doc: Omit<CorpusDocument, 'shingles' | 'minHashSig'>, k = 5): void {
+  public indexDocument(doc: Omit<CorpusDocument, 'shingles' | 'minHashSig'>, k = 5): 'indexed' | 'updated' {
+    const existing = this.documents.get(doc.id);
+    const action = existing ? 'updated' : 'indexed';
+
+    // If updating, clean up existing shingles from inverted index
+    if (existing?.shingles) {
+      for (const sh of existing.shingles) {
+        const idSet = this.invertedShingleIndex.get(sh);
+        if (idSet) {
+          idSet.delete(doc.id);
+          if (idSet.size === 0) {
+            this.invertedShingleIndex.delete(sh);
+          }
+        }
+      }
+    }
+
     const tokens = tokenizeWords(doc.text);
     const shingles = generateShingles(tokens, k);
     const minHashSig = computeMinHashSignature(shingles);
@@ -163,6 +220,21 @@ export class CorpusIndexManager {
       }
       this.invertedShingleIndex.get(shingle)!.add(doc.id);
     }
+
+    // Record audit log
+    this.auditLogs.push({
+      timestamp: new Date().toISOString(),
+      action,
+      docId: doc.id,
+      title: doc.title,
+      wordCount: tokens.length
+    });
+
+    return action;
+  }
+
+  public getAuditLogs(): CorpusAuditLog[] {
+    return [...this.auditLogs];
   }
 
   public getDocumentCount(): number {
@@ -178,98 +250,107 @@ export class CorpusIndexManager {
   }
 
   /**
-   * Scans an input text against the indexed corpus
+   * Scans an input text against the indexed corpus.
+   * - similarityScore = share of input words covered by a k-word run found in ANY indexed source
+   * - per-source matchedPercent = share of input words covered by that source
+   * - matchedSegments = merged, exact character ranges of the input that match a source
    */
   public checkSimilarity(inputText: string, k = 5): PlagiarismScanResult {
-    const inputTokens = tokenizeWords(inputText);
-    const wordsChecked = inputTokens.length;
-    const inputShingles = generateShingles(inputTokens, k);
+    const positioned = tokenizeWithOffsets(inputText);
+    const tokens = positioned.map(t => t.token);
+    const wordsChecked = tokens.length;
 
-    if (inputShingles.size === 0 || wordsChecked === 0) {
+    const baseStats = {
+      indexedDocuments: this.documents.size,
+      totalCorpusShingles: this.invertedShingleIndex.size,
+      searchedScope: 'Local Reference & Open-Access Knowledge Index'
+    };
+
+    if (wordsChecked === 0) {
       return {
         similarityScore: 0,
         uniquenessScore: 100,
-        totalWordsChecked: wordsChecked,
+        totalWordsChecked: 0,
         matchedSources: [],
         matchedSegments: [],
-        corpusStats: {
-          indexedDocuments: this.documents.size,
-          totalCorpusShingles: this.invertedShingleIndex.size,
-          searchedScope: 'Local Reference & Open-Access Knowledge Index',
-          note: 'Verified against local indexed corpus. Not an exhaustive web crawler index.'
-        }
+        corpusStats: { ...baseStats, note: 'Verified against local indexed corpus. Not an exhaustive web crawler index.' }
       };
     }
 
-    const inputMinHash = computeMinHashSignature(inputShingles);
+    // Shingle i covers tokens [i, i + width)
+    const width = Math.min(k, tokens.length);
+    const shingleCount = tokens.length - width + 1;
 
-    // Find candidate documents using inverted shingle index
-    const candidateMatches = new Map<string, number>(); // docId -> matching shingle count
-    const matchedShinglesByDoc = new Map<string, Set<string>>();
+    const coveredAny = new Uint8Array(tokens.length);
+    const coverageByDoc = new Map<string, Uint8Array>();
+    const sampleByDoc = new Map<string, string[]>();
 
-    for (const shingle of inputShingles) {
+    for (let i = 0; i < shingleCount; i++) {
+      const shingle = tokens.slice(i, i + width).join(' ');
       const docIds = this.invertedShingleIndex.get(shingle);
-      if (docIds) {
-        for (const docId of docIds) {
-          candidateMatches.set(docId, (candidateMatches.get(docId) || 0) + 1);
-          if (!matchedShinglesByDoc.has(docId)) {
-            matchedShinglesByDoc.set(docId, new Set());
-          }
-          matchedShinglesByDoc.get(docId)!.add(shingle);
+      if (!docIds) continue;
+      for (const docId of docIds) {
+        let cov = coverageByDoc.get(docId);
+        if (!cov) {
+          cov = new Uint8Array(tokens.length);
+          coverageByDoc.set(docId, cov);
+          sampleByDoc.set(docId, []);
         }
+        for (let t = i; t < i + width; t++) {
+          cov[t] = 1;
+          coveredAny[t] = 1;
+        }
+        const samples = sampleByDoc.get(docId)!;
+        if (samples.length < 3) samples.push(shingle);
       }
     }
 
+    const countCovered = (arr: Uint8Array) => arr.reduce((a, b) => a + b, 0);
+    const pct = (n: number) => Math.min(100, Math.round((n / tokens.length) * 100));
+
+    const inputSig = computeMinHashSignature(new Set(Array.from({ length: shingleCount }, (_, i) => tokens.slice(i, i + width).join(' '))));
+
     const matchedSources: PlagiarismScanResult['matchedSources'] = [];
     const matchedSegments: MatchedSegment[] = [];
-    let globalMatchingShinglesCount = 0;
+    const MAX_SEGMENTS = 200; // keep payloads (and UI rendering) light
 
-    for (const [docId, matchCount] of candidateMatches.entries()) {
+    for (const [docId, cov] of coverageByDoc.entries()) {
       const doc = this.documents.get(docId);
       if (!doc) continue;
-
-      // Calculate exact shingle overlap percentage
-      const matchPct = Math.min(100, Math.round((matchCount / inputShingles.size) * 100));
-
-      // Optional MinHash Jaccard cross-check
-      const estimatedJaccard = doc.minHashSig ? estimateJaccardMinHash(inputMinHash, doc.minHashSig) : 0;
-
-      // Collect sample matching excerpt
-      const matchingShingleSamples = Array.from(matchedShinglesByDoc.get(docId) || []);
-      const excerpt = matchingShingleSamples.slice(0, 3).join(' ... ');
 
       matchedSources.push({
         id: doc.id,
         url: doc.url,
         title: doc.title,
         authorOrSource: doc.authorOrSource,
-        matchedPercent: matchPct,
-        matchedText: excerpt || doc.text.substring(0, 150)
+        matchedPercent: pct(countCovered(cov)),
+        documentSimilarity: doc.minHashSig ? Math.round(estimateJaccardMinHash(inputSig, doc.minHashSig) * 100) : 0,
+        matchedText: (sampleByDoc.get(docId) || []).join(' ... ') || doc.text.substring(0, 150)
       });
 
-      // Find character positions in input text for highlighting
-      for (const shingle of matchingShingleSamples.slice(0, 5)) {
-        const idx = inputText.toLowerCase().indexOf(shingle);
-        if (idx !== -1) {
-          matchedSegments.push({
-            text: shingle,
-            sourceId: doc.id,
-            sourceTitle: doc.title,
-            sourceUrl: doc.url,
-            startInInput: idx,
-            endInInput: idx + shingle.length
-          });
-        }
+      // Merge consecutive covered tokens into contiguous character ranges
+      let t = 0;
+      while (t < cov.length && matchedSegments.length < MAX_SEGMENTS) {
+        if (!cov[t]) { t++; continue; }
+        const runStart = t;
+        while (t < cov.length && cov[t]) t++;
+        const startChar = positioned[runStart].start;
+        const endChar = positioned[t - 1].end;
+        matchedSegments.push({
+          text: inputText.slice(startChar, endChar),
+          sourceId: doc.id,
+          sourceTitle: doc.title,
+          sourceUrl: doc.url,
+          startInInput: startChar,
+          endInInput: endChar
+        });
       }
-
-      globalMatchingShinglesCount += matchCount;
     }
 
-    // Sort matched sources by highest match percentage
     matchedSources.sort((a, b) => b.matchedPercent - a.matchedPercent);
+    matchedSegments.sort((a, b) => (a.startInInput ?? 0) - (b.startInInput ?? 0));
 
-    // Compute overall similarity ratio bounded to 100%
-    const overallSimilarity = Math.min(100, Math.round((matchedSources.length > 0 ? matchedSources[0].matchedPercent : 0)));
+    const overallSimilarity = pct(countCovered(coveredAny));
 
     return {
       similarityScore: overallSimilarity,
@@ -278,9 +359,7 @@ export class CorpusIndexManager {
       matchedSources,
       matchedSegments,
       corpusStats: {
-        indexedDocuments: this.documents.size,
-        totalCorpusShingles: this.invertedShingleIndex.size,
-        searchedScope: 'Local Reference & Open-Access Knowledge Index',
+        ...baseStats,
         note: 'Scanned against local verified index. Authentic k-gram shingle match with zero fabricated URLs.'
       }
     };

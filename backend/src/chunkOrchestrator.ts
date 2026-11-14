@@ -1,7 +1,42 @@
-import { splitIntoParagraphs, splitIntoSentences, chunkSentences } from './segmenter.js';
+import { splitParagraphsWithLayout, splitIntoSentences, chunkSentences } from './segmenter.js';
 import { executeLlmCompletion } from './llm.js';
 import { getParaphraseSystemPrompt } from './prompts.js';
 import { ParaphraseMode, SynonymStrength } from './types.js';
+
+export class JobCancelledError extends Error {
+  constructor(jobId: string) {
+    super(`Job ${jobId} was cancelled by user.`);
+    this.name = 'JobCancelledError';
+  }
+}
+
+/**
+ * Creates an abortable sleep that immediately rejects if the AbortSignal fires
+ */
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      return reject(err);
+    }
+
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      reject(err);
+    };
+
+    signal.addEventListener('abort', onAbort);
+  });
+}
 
 export interface ChunkRecord {
   id: string;
@@ -36,6 +71,8 @@ export class DocumentProcessingJob {
   public partialRecovery = false;
   public errorMessage?: string;
   private rollingContext = '';
+  private leadingWhitespace = '';
+  private paragraphSeparators: string[] = [];
 
   constructor(
     jobId: string,
@@ -51,7 +88,10 @@ export class DocumentProcessingJob {
   }
 
   private prepareChunks(): void {
-    const paragraphs = splitIntoParagraphs(this.originalText);
+    const layout = splitParagraphsWithLayout(this.originalText);
+    const paragraphs = layout.paragraphs;
+    this.leadingWhitespace = layout.leading;
+    this.paragraphSeparators = layout.separators;
     let globalIndex = 0;
 
     for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
@@ -73,7 +113,7 @@ export class DocumentProcessingJob {
   }
 
   public cancel(): void {
-    if (this.status === 'processing' || this.status === 'pending') {
+    if (this.status !== 'completed' && this.status !== 'failed') {
       this.status = 'cancelled';
       this.abortController.abort();
     }
@@ -81,7 +121,11 @@ export class DocumentProcessingJob {
 
   public getProgress(): DocumentJobProgress {
     const total = this.chunks.length;
-    const progressPercent = total > 0 ? Math.round((this.completedChunks / total) * 100) : 100;
+    // Failed chunks are still "processed" (original text retained), so they count toward progress
+    const processed = this.completedChunks + this.failedChunks;
+    const progressPercent = this.status === 'completed'
+      ? 100
+      : total > 0 ? Math.round((processed / total) * 100) : 100;
 
     return {
       jobId: this.id,
@@ -90,22 +134,32 @@ export class DocumentProcessingJob {
       completedChunks: this.completedChunks,
       failedChunks: this.failedChunks,
       progressPercent,
-      recombinedText: (this.status === 'completed' || this.partialRecovery) ? this.recombine() : undefined,
-      partialRecovery: this.partialRecovery,
+      recombinedText: this.status === 'completed' ? this.recombine() : undefined,
+      partialRecovery: this.partialRecovery && this.status !== 'cancelled',
       errorMessage: this.errorMessage
     };
   }
 
+  public isCancelled(): boolean {
+    return this.abortController.signal.aborted || (this.status as string) === 'cancelled';
+  }
+
   /**
-   * Executes chunk processing sequentially with rolling context and transient retries
+   * Executes chunk processing sequentially with rolling context and transient retries.
+   * Cancels immediately when AbortSignal fires, preventing any cancelled job from completing.
    */
   public async execute(): Promise<string> {
+    if (this.isCancelled()) {
+      this.status = 'cancelled';
+      throw new JobCancelledError(this.id);
+    }
+
     this.status = 'processing';
 
     for (const chunk of this.chunks) {
-      if (this.abortController.signal.aborted) {
+      if (this.isCancelled()) {
         this.status = 'cancelled';
-        throw new Error(`Job ${this.id} was cancelled by user.`);
+        throw new JobCancelledError(this.id);
       }
 
       chunk.status = 'processing';
@@ -113,6 +167,11 @@ export class DocumentProcessingJob {
       const maxRetries = 2;
 
       for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        if (this.isCancelled()) {
+          this.status = 'cancelled';
+          throw new JobCancelledError(this.id);
+        }
+
         chunk.attempts = attempt;
         try {
           const systemPrompt = getParaphraseSystemPrompt(
@@ -126,7 +185,20 @@ export class DocumentProcessingJob {
             userPrompt = `User style instruction: "${this.customInstruction}"\n\nText to rewrite:\n${userPrompt}`;
           }
 
-          const rewritten = await executeLlmCompletion(systemPrompt, userPrompt, this.model);
+          const rewritten = await executeLlmCompletion(
+            systemPrompt,
+            userPrompt,
+            this.model,
+            0.3,
+            this.abortController.signal
+          );
+
+          // Check cancellation immediately following completion
+          if (this.isCancelled()) {
+            this.status = 'cancelled';
+            throw new JobCancelledError(this.id);
+          }
+
           chunk.rewrittenText = rewritten.trim();
           chunk.status = 'completed';
           this.completedChunks++;
@@ -137,12 +209,41 @@ export class DocumentProcessingJob {
           this.rollingContext = lastSentence || chunk.rewrittenText;
           break;
         } catch (err: any) {
+          if (
+            this.isCancelled() ||
+            err.name === 'AbortError' ||
+            err.name === 'JobCancelledError' ||
+            err.message?.includes('aborted')
+          ) {
+            this.status = 'cancelled';
+            chunk.status = 'failed';
+            chunk.error = 'Job cancelled by user';
+            throw new JobCancelledError(this.id);
+          }
+
           chunk.error = err.message || 'Chunk processing failed';
+          // Transport/HTTP errors were already retried inside the provider SDK; re-trying them here
+          // would multiply attempts (and cost). Only retry errors explicitly flagged as retryable.
+          if (err.retryable !== true) {
+            break;
+          }
           if (attempt <= maxRetries) {
-            // Transient backoff wait before retry
-            await new Promise(r => setTimeout(r, attempt * 200));
+            try {
+              // Abortable backoff wait
+              await abortableSleep(attempt * 200, this.abortController.signal);
+            } catch (sleepErr: any) {
+              this.status = 'cancelled';
+              chunk.status = 'failed';
+              chunk.error = 'Job cancelled by user during backoff';
+              throw new JobCancelledError(this.id);
+            }
           }
         }
+      }
+
+      if (this.isCancelled()) {
+        this.status = 'cancelled';
+        throw new JobCancelledError(this.id);
       }
 
       if (!success) {
@@ -152,6 +253,11 @@ export class DocumentProcessingJob {
         chunk.rewrittenText = chunk.originalText;
         this.partialRecovery = true;
       }
+    }
+
+    if (this.isCancelled()) {
+      this.status = 'cancelled';
+      throw new JobCancelledError(this.id);
     }
 
     if (this.failedChunks > 0 && this.completedChunks === 0) {
@@ -168,54 +274,139 @@ export class DocumentProcessingJob {
    * Recombines chunks into original paragraph and document structure
    */
   public recombine(): string {
-    const paragraphMap = new Map<number, string[]>();
+    return this.leadingWhitespace + this.getParagraphPairs()
+      .map((p, i) => p.rewritten + (this.paragraphSeparators[i] ?? ''))
+      .join('');
+  }
 
+  /**
+   * Per-chunk original/rewritten pairs with the layout text that follows each chunk
+   * (a space between chunks of one paragraph, the original separator after a paragraph).
+   * Used to build diffs chunk-by-chunk, which stays fast on very large documents.
+   */
+  public getChunkPairs(): Array<{ original: string; rewritten: string; after: string }> {
+    const pairs: Array<{ original: string; rewritten: string; after: string }> = [];
+    for (let i = 0; i < this.chunks.length; i++) {
+      const chunk = this.chunks[i];
+      const next = this.chunks[i + 1];
+      const after = next && next.paragraphIndex === chunk.paragraphIndex
+        ? ' '
+        : (this.paragraphSeparators[chunk.paragraphIndex] ?? '');
+      pairs.push({ original: chunk.originalText, rewritten: chunk.rewrittenText || chunk.originalText, after });
+    }
+    return pairs;
+  }
+
+  public getLeadingWhitespace(): string {
+    return this.leadingWhitespace;
+  }
+
+  private getParagraphPairs(): Array<{ rewritten: string }> {
+    const paragraphMap = new Map<number, string[]>();
     for (const chunk of this.chunks) {
-      if (!paragraphMap.has(chunk.paragraphIndex)) {
-        paragraphMap.set(chunk.paragraphIndex, []);
-      }
+      if (!paragraphMap.has(chunk.paragraphIndex)) paragraphMap.set(chunk.paragraphIndex, []);
       paragraphMap.get(chunk.paragraphIndex)!.push(chunk.rewrittenText || chunk.originalText);
     }
-
-    const reconstructedParagraphs: string[] = [];
-    const sortedPIndices = Array.from(paragraphMap.keys()).sort((a, b) => a - b);
-
-    for (const pIdx of sortedPIndices) {
-      const parts = paragraphMap.get(pIdx) || [];
-      reconstructedParagraphs.push(parts.join(' '));
-    }
-
-    return reconstructedParagraphs.join('\n\n');
+    return Array.from(paragraphMap.keys())
+      .sort((a, b) => a - b)
+      .map(idx => ({ rewritten: (paragraphMap.get(idx) || []).join(' ') }));
   }
 }
 
+interface JobEntry {
+  job: DocumentProcessingJob;
+  registeredAt: number;
+  timer: NodeJS.Timeout;
+}
+
 /**
- * In-memory manager for active document processing jobs with TTL cleanup
+ * In-memory manager for active document processing jobs with TTL cleanup and capacity bounds
  */
 export class DocumentJobRegistry {
-  private jobs: Map<string, DocumentProcessingJob> = new Map();
+  private jobs: Map<string, JobEntry> = new Map();
+  private readonly maxActiveJobs: number;
+  private readonly ttlMs: number;
+
+  constructor(maxActiveJobs = 200, ttlMinutes = 30) {
+    this.maxActiveJobs = maxActiveJobs;
+    this.ttlMs = ttlMinutes * 60 * 1000;
+  }
 
   public register(job: DocumentProcessingJob): void {
-    this.jobs.set(job.id, job);
+    // If capacity reached, prune completed, cancelled, or failed jobs first
+    if (this.jobs.size >= this.maxActiveJobs) {
+      this.prune();
+    }
 
-    // Auto-cleanup after 30 minutes
-    setTimeout(() => {
-      this.jobs.delete(job.id);
-    }, 30 * 60 * 1000);
+    // Auto-cleanup after TTL
+    const timer = setTimeout(() => {
+      this.delete(job.id);
+    }, this.ttlMs);
+    timer.unref?.();
+
+    this.jobs.set(job.id, {
+      job,
+      registeredAt: Date.now(),
+      timer
+    });
   }
 
   public get(id: string): DocumentProcessingJob | undefined {
-    return this.jobs.get(id);
+    return this.jobs.get(id)?.job;
   }
 
   public cancel(id: string): boolean {
-    const job = this.jobs.get(id);
-    if (job) {
-      job.cancel();
+    const entry = this.jobs.get(id);
+    if (entry) {
+      entry.job.cancel();
       return true;
     }
     return false;
   }
+
+  public delete(id: string): void {
+    const entry = this.jobs.get(id);
+    if (entry) {
+      clearTimeout(entry.timer);
+      this.jobs.delete(id);
+    }
+  }
+
+  public prune(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.jobs.entries()) {
+      const isTerminal = ['completed', 'failed', 'cancelled'].includes(entry.job.status);
+      const isExpired = now - entry.registeredAt > this.ttlMs;
+      if (isTerminal || isExpired) {
+        clearTimeout(entry.timer);
+        this.jobs.delete(id);
+      }
+    }
+
+    // If still at or above capacity, drop the oldest entry (cancelling it so it doesn't keep
+    // consuming provider calls while no longer trackable)
+    if (this.jobs.size >= this.maxActiveJobs) {
+      const oldestId = Array.from(this.jobs.keys())[0];
+      if (oldestId) {
+        this.jobs.get(oldestId)?.job.cancel();
+        this.delete(oldestId);
+      }
+    }
+  }
+
+  public get size(): number {
+    return this.jobs.size;
+  }
+
+  public clearAll(): void {
+    for (const entry of this.jobs.values()) {
+      clearTimeout(entry.timer);
+    }
+    this.jobs.clear();
+  }
 }
 
-export const documentJobRegistry = new DocumentJobRegistry();
+// Bounded for small hosts (e.g. Render free: 512 MB RAM); each job can hold a large document
+export const documentJobRegistry = new DocumentJobRegistry(
+  Math.max(5, parseInt(process.env.MAX_ACTIVE_JOBS || '50', 10) || 50)
+);

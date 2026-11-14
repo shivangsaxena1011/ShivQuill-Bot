@@ -53,6 +53,8 @@ export interface GrammarIssue {
   start: number;
   end: number;
   explanation: string;
+  /** false when the model's quoted text could not be found in the input (start/end are then 0) */
+  located?: boolean;
 }
 
 export interface GrammarCheckResponse {
@@ -78,7 +80,7 @@ export interface HumanizeResponse {
   originalText: string;
   humanizedText: string;
   readabilityScore: {
-    burstiness: 'High' | 'Natural' | 'Moderate';
+    burstiness: 'High' | 'Natural' | 'Low';
     flowScore: number; // 0 - 100
     tone: string;
     fleschReadingEase?: number;
@@ -129,7 +131,8 @@ export interface AiDetectionResponse {
   overallVerdict: 'Likely Human-Written' | 'Mixed Signals' | 'Likely AI-Generated';
   sentences: AiDetectionSentence[];
   metrics: {
-    perplexityScore: number;
+    /** Shannon entropy scaled to 0-100 (lexical information density); not model perplexity */
+    entropyScore: number;
     burstinessScore: number;
     shannonEntropy: number;
     sentenceLengthCV: number;
@@ -147,6 +150,7 @@ export interface PlagiarismSourceMatch {
   title: string;
   authorOrSource: string;
   matchedPercent: number;
+  documentSimilarity?: number;
   matchedText: string;
 }
 
@@ -159,6 +163,8 @@ export interface PlagiarismCheckResponse {
     text: string;
     sourceTitle?: string;
     sourceUrl?: string;
+    start?: number;
+    end?: number;
   }[];
   corpusStats: {
     indexedDocuments: number;
@@ -224,6 +230,8 @@ export interface WritingSuggestion {
   explanation: string;
   start: number;
   end: number;
+  /** false when the model's quoted text could not be found in the input (start/end are then 0) */
+  located?: boolean;
 }
 
 export interface WritingSuggestionsResponse {

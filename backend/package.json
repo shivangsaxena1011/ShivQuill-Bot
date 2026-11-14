@@ -1,6 +1,6 @@
 {
   "name": "shivquill-backend",
-  "version": "1.0.0",
+  "version": "2.2.0",
   "type": "module",
   "description": "Production-grade AI writing platform backend with multi-provider orchestration",
   "main": "dist/index.js",

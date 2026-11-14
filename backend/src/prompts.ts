@@ -135,9 +135,9 @@ CRITICAL RULES:
 - Output ONLY the summary text.`;
 }
 
-export function getTranslateSystemPrompt(targetLangName: string, targetLangCode: string): string {
+export function getTranslateSystemPrompt(targetLangName: string, targetLangCode: string, sourceLangName?: string): string {
   return `You are a professional, culturally fluent translator.
-Translate the input text faithfully and idiomatically into ${targetLangName} (ISO code: ${targetLangCode}).
+Translate the input text${sourceLangName ? ` from ${sourceLangName}` : ''} faithfully and idiomatically into ${targetLangName} (ISO code: ${targetLangCode}).
 
 TRANSLATION REQUIREMENTS:
 1. Maintain the original document's tone, formatting, paragraphing, and register.

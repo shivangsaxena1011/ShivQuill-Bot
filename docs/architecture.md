@@ -10,7 +10,7 @@ ShivQuill is architected as an independent, modular full-stack AI writing platfo
 |   Vue 3 (Composition API) + TypeScript + Vite + Pinia                   |
 |   - Responsive Dual-Panel Writing Workspace & Interactive Token Diffing |
 |   - Real-Time Error Banners & Provider Engine Status (Active/Mock/Uncfg)|
-|   - Unlimited Document Length Support (No Paywalls or Word Caps)        |
+|   - Large Document Length Support (Up to 1M Chars / ~150K Words, No Paywalls) |
 +-------------------------------------------------------------------------+
                                     |
                             HTTP / REST / JSON

@@ -147,14 +147,14 @@ ShivQuill strictly refuses to present unconfigured or mock output as real AI eva
   console.log(`\n========================================`);
   console.log(`BENCHMARK EXECUTION SUMMARY`);
   console.log(`Engine: ${config.requestType} (${isMock ? 'Local Simulation' : 'Live Provider'})`);
-  console.log(`Samples Processed: ${totalProcessed}/200`);
+  console.log(`Samples Processed: ${totalProcessed}/${samples.length}`);
   console.log(`Total Wall-Clock Time: ${overallDuration} ms`);
   console.log(`Mean Latency per Sample: ${avgLatency} ms`);
   console.log(`Entity & Invariance Preservation Rate: ${factPreservationRate}% (${successfulPreservations}/${totalPreservationChecks})`);
   console.log(`========================================\n`);
 
   // Write Honest Markdown Report
-  let markdown = `# Benchmark Assessment: 200 Synthetic Writing Samples
+  let markdown = `# Benchmark Assessment: ${samples.length} Synthetic Writing Samples
 
 ## 1. Methodology & Test Execution Context
 

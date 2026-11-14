@@ -2,8 +2,11 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getHumanizeSystemPrompt } from '../prompts.js';
 import { executeLlmCompletion } from '../llm.js';
-import { generateDiffSpans } from '../diff.js';
+import { generateDiffSpansForPairs } from '../diff.js';
 import { HumanizeResponse } from '../types.js';
+import { config } from '../config.js';
+import { splitIntoBatches, joinBatchOutputs, mapBatches } from '../batching.js';
+import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 
 export const humanizeRouter = Router();
 
@@ -42,12 +45,22 @@ function calculateFleschScore(text: string): number {
 }
 
 humanizeRouter.post('/', async (req: Request, res: Response) => {
+  const signal = abortOnClientDisconnect(res);
   try {
     const { text, readabilityLevel, model } = humanizeSchema.parse(req.body);
     const systemPrompt = getHumanizeSystemPrompt(readabilityLevel);
 
-    const humanizedText = await executeLlmCompletion(systemPrompt, text, model, 0.4);
-    const diffSpans = generateDiffSpans(text, humanizedText);
+    const batched = splitIntoBatches(text, config.maxCharsPerRequest);
+    const outputs = await mapBatches(
+      batched,
+      batch => executeLlmCompletion(systemPrompt, batch.text, model, 0.4, signal),
+      signal
+    );
+    const humanizedText = joinBatchOutputs(batched, outputs);
+    const diffSpans = generateDiffSpansForPairs(
+      batched.batches.map((b, i) => ({ original: b.text, rewritten: outputs[i].trim(), after: b.separator })),
+      batched.leading
+    );
 
     // Compute sentence length standard deviation as genuine burstiness metric
     const sentences = humanizedText.split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -56,9 +69,12 @@ humanizeRouter.post('/', async (req: Request, res: Response) => {
     const variance = lengths.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / (lengths.length || 1);
     const stdDev = Math.sqrt(variance);
 
-    const burstiness = stdDev > 6 ? 'High' : stdDev > 3 ? 'Natural' : 'Moderate';
+    // Burstiness = sentence-length variation (low = uniform, robotic cadence)
+    const burstiness = stdDev > 6 ? 'High' : stdDev > 3 ? 'Natural' : 'Low';
     const fleschScore = calculateFleschScore(humanizedText);
-    const flowScore = Math.min(98, Math.max(70, Math.round(fleschScore * 0.4 + (stdDev * 5) + 40)));
+    // Flow blends readability (60%) with sentence-length variation (40%, saturating at stdDev 8)
+    const variationScore = Math.min(100, (stdDev / 8) * 100);
+    const flowScore = Math.round(Math.min(100, Math.max(0, fleschScore * 0.6 + variationScore * 0.4)));
 
     const response: HumanizeResponse = {
       originalText: text,
@@ -74,6 +90,9 @@ humanizeRouter.post('/', async (req: Request, res: Response) => {
 
     return res.json(response);
   } catch (error: any) {
+    if (signal.aborted || isAbortError(error)) {
+      return; // client disconnected; nothing to send
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0].message });
     }

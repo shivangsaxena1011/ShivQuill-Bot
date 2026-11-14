@@ -3,6 +3,38 @@ import { config } from './config.js';
 
 let openaiClient: OpenAI | null = null;
 
+/**
+ * Error raised for provider failures. `retryable` is true only for failures the SDK
+ * does not already retry itself (e.g. an empty completion), so callers can safely retry those.
+ */
+export class ProviderError extends Error {
+  public readonly status?: number;
+  public readonly retryable: boolean;
+
+  constructor(message: string, options: { status?: number; retryable?: boolean } = {}) {
+    super(message);
+    this.name = 'ProviderError';
+    this.status = options.status;
+    this.retryable = options.retryable ?? false;
+  }
+}
+
+export class ModelNotAllowedError extends Error {
+  constructor(model: string) {
+    super(`Model '${model}' is not allowed on this server.`);
+    this.name = 'ModelNotAllowedError';
+  }
+}
+
+/**
+ * Returns true if a client-requested model may be used. The provider default is always allowed;
+ * anything else must be listed in ALLOWED_MODELS.
+ */
+export function isModelAllowed(model: string | undefined | null): boolean {
+  if (model === undefined || model === null || model === '') return true;
+  return model === getDefaultModel() || config.allowedModels.includes(model);
+}
+
 function getClient(): OpenAI {
   if (config.requestType === 'MOCK') {
     throw new Error('Attempted to initialize OpenAI client in MOCK mode.');
@@ -53,18 +85,49 @@ function getClient(): OpenAI {
   openaiClient = new OpenAI({
     apiKey: apiKey || 'dummy-key-for-local-custom-llm',
     baseURL: baseUrl,
-    timeout: 60000 // 60s timeout
+    timeout: 60000, // 60s timeout per attempt
+    // The SDK retries transient failures (connection errors, 408/409/429/5xx) with backoff.
+    // Callers must NOT add their own retry loop for these, or attempts multiply.
+    maxRetries: 2
   });
 
   return openaiClient;
+}
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export async function executeLlmCompletion(
   systemPrompt: string,
   userPrompt: string,
   modelOverride?: string,
-  temperature = 0.3
+  temperature = 0.3,
+  abortSignal?: AbortSignal
 ): Promise<string> {
+  return executeChatCompletion(systemPrompt, [{ role: 'user', content: userPrompt }], modelOverride, temperature, abortSignal);
+}
+
+/**
+ * Multi-turn completion: sends a system prompt plus real user/assistant turns to the provider.
+ */
+export async function executeChatCompletion(
+  systemPrompt: string,
+  conversation: ConversationMessage[],
+  modelOverride?: string,
+  temperature = 0.3,
+  abortSignal?: AbortSignal
+): Promise<string> {
+  const lastUser = [...conversation].reverse().find(m => m.role === 'user');
+  const userPrompt = lastUser?.content ?? '';
+
+  if (abortSignal?.aborted) {
+    const abortErr = new Error('The operation was aborted');
+    abortErr.name = 'AbortError';
+    throw abortErr;
+  }
+
   // ZERO-MOCK POLICY: If in production, strictly forbid mock execution
   if (config.env === 'production' && config.requestType === 'MOCK') {
     throw new Error('[ShivQuill Security] ZERO-MOCK POLICY: MOCK execution is forbidden in production.');
@@ -72,6 +135,11 @@ export async function executeLlmCompletion(
 
   // If explicitly configured for MOCK mode in non-production (e.g. testing), run the simulated engine
   if (config.requestType === 'MOCK') {
+    if (abortSignal?.aborted) {
+      const abortErr = new Error('The operation was aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
     return executeSimulatedLlmCompletion(systemPrompt, userPrompt);
   }
 
@@ -83,18 +151,26 @@ export async function executeLlmCompletion(
     );
   }
 
+  if (!isModelAllowed(modelOverride)) {
+    throw new ModelNotAllowedError(modelOverride as string);
+  }
+
   const client = getClient();
   const model = modelOverride || getDefaultModel();
+  let emptyCompletion = false;
 
   try {
-    const response = await client.chat.completions.create({
-      model,
-      temperature,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
-    });
+    const response = await client.chat.completions.create(
+      {
+        model,
+        temperature,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...conversation.map(m => ({ role: m.role, content: m.content }))
+        ]
+      },
+      { signal: abortSignal }
+    );
 
     let content = response.choices[0]?.message?.content || '';
 
@@ -105,14 +181,24 @@ export async function executeLlmCompletion(
     }
 
     if (!content) {
+      emptyCompletion = true;
       throw new Error('AI Provider returned an empty completion response.');
     }
 
     return content;
   } catch (error: any) {
+    if (error.name === 'AbortError' || abortSignal?.aborted || error.message?.includes('aborted')) {
+      const abortErr = new Error('The operation was aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
     console.error(`[ShivQuill LLM] Error calling provider ${config.requestType}:`, error.message || error);
-    // Explicitly rethrow provider error to prevent silent mock output to real users
-    throw new Error(`AI Provider Error (${config.requestType}): ${error.message || 'Upstream completion failed'}`);
+    // Explicitly rethrow provider error to prevent silent mock output to real users.
+    // Transport/HTTP failures were already retried by the SDK, so only an empty completion is retryable.
+    throw new ProviderError(
+      `AI Provider Error (${config.requestType}): ${error.message || 'Upstream completion failed'}`,
+      { status: typeof error.status === 'number' ? error.status : undefined, retryable: emptyCompletion }
+    );
   }
 }
 

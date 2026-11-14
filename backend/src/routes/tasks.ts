@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { taskQueue } from '../queue.js';
 import { documentJobRegistry } from '../chunkOrchestrator.js';
+import { buildParaphraseResponse } from './paraphrase.js';
 
 export const tasksRouter = Router();
 
@@ -10,7 +11,11 @@ tasksRouter.get('/:id', (req: Request, res: Response) => {
   // 1. Check Document Job Registry
   const docJob = documentJobRegistry.get(id);
   if (docJob) {
-    return res.json(docJob.getProgress());
+    const progress = docJob.getProgress();
+    if (progress.status === 'completed') {
+      return res.json({ ...progress, result: buildParaphraseResponse(docJob) });
+    }
+    return res.json(progress);
   }
 
   // 2. Check Standard Task Queue

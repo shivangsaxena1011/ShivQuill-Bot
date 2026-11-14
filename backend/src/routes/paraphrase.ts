@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { DocumentProcessingJob, documentJobRegistry } from '../chunkOrchestrator.js';
-import { generateDiffSpans } from '../diff.js';
+import { DocumentProcessingJob, documentJobRegistry, JobCancelledError } from '../chunkOrchestrator.js';
+import { generateDiffSpansForPairs } from '../diff.js';
 import { config } from '../config.js';
 import { ParaphraseResponse, ParaphraseMode, SynonymStrength, SemanticConsistencyReport } from '../types.js';
 
@@ -90,7 +90,44 @@ function evaluateSemanticConsistency(originalText: string, rewrittenText: string
   };
 }
 
+const countWords = (str: string) => str.trim().split(/\s+/).filter(Boolean).length;
+
+// Full responses for finished jobs are computed once (diffing a large document is expensive)
+const responseCache = new WeakMap<DocumentProcessingJob, ParaphraseResponse & { partialRecovery?: boolean }>();
+
+/**
+ * Builds the full paraphrase response (diff spans, invariance report) for a completed job.
+ * Shared by the synchronous route and by /api/tasks/:id for async jobs.
+ */
+export function buildParaphraseResponse(job: DocumentProcessingJob): ParaphraseResponse & { partialRecovery?: boolean } {
+  const cached = responseCache.get(job);
+  if (cached) return cached;
+
+  const paraphrasedText = job.recombine();
+  const response: ParaphraseResponse & { partialRecovery?: boolean } = {
+    originalText: job.originalText,
+    paraphrasedText,
+    mode: job.mode,
+    synonymStrength: job.synonymStrength,
+    diffSpans: generateDiffSpansForPairs(job.getChunkPairs(), job.getLeadingWhitespace()),
+    wordCountOriginal: countWords(job.originalText),
+    wordCountAltered: countWords(paraphrasedText),
+    semanticConsistency: evaluateSemanticConsistency(job.originalText, paraphrasedText),
+    partialRecovery: job.partialRecovery
+  };
+  responseCache.set(job, response);
+  return response;
+}
+
 paraphraseRouter.post('/', async (req: Request, res: Response) => {
+  let syncJob: DocumentProcessingJob | undefined;
+  // If the client disconnects during a synchronous run, cancel the job so it stops calling the provider
+  res.on('close', () => {
+    if (!res.writableFinished && syncJob) {
+      syncJob.cancel();
+    }
+  });
+
   try {
     const parsed = paraphraseSchema.parse(req.body);
     const { text, mode, synonymStrength, customInstruction, model, async: isAsync } = parsed;
@@ -120,26 +157,14 @@ paraphraseRouter.post('/', async (req: Request, res: Response) => {
     }
 
     // Default: synchronous execution with retry and chunk recovery
-    const paraphrasedText = await job.execute();
-    const diffSpans = generateDiffSpans(text, paraphrasedText);
-    const semanticConsistency = evaluateSemanticConsistency(text, paraphrasedText);
-
-    const countWords = (str: string) => str.trim().split(/\s+/).filter(Boolean).length;
-
-    const response: ParaphraseResponse & { partialRecovery?: boolean } = {
-      originalText: text,
-      paraphrasedText,
-      mode: mode as ParaphraseMode,
-      synonymStrength: synonymStrength as SynonymStrength,
-      diffSpans,
-      wordCountOriginal: countWords(text),
-      wordCountAltered: countWords(paraphrasedText),
-      semanticConsistency,
-      partialRecovery: job.partialRecovery
-    };
-
-    return res.json(response);
+    syncJob = job;
+    await job.execute();
+    return res.json(buildParaphraseResponse(job));
   } catch (error: any) {
+    if (error instanceof JobCancelledError) {
+      if (res.writableEnded || res.destroyed) return; // client already gone
+      return res.status(409).json({ error: 'Paraphrase job was cancelled.' });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0].message });
     }

@@ -1,0 +1,28 @@
+# Render Blueprint — deploys ShivQuill as ONE web service (the backend also serves the built frontend).
+# Free plan notes: the service sleeps after ~15 min idle and wakes on the next request (~30-60s).
+services:
+  - type: web
+    name: shivquill
+    runtime: node
+    plan: free
+    buildCommand: npm run render-build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: REQUEST_TYPE
+        value: GROQ
+      - key: GROQ_API_KEY
+        sync: false          # set this secret in the Render dashboard
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: CORPUS_ADMIN_KEY
+        generateValue: true
+      - key: AI_REQUESTS_PER_MINUTE
+        value: "30"
+      - key: MAX_CHARS_PER_REQUEST
+        value: "12000"

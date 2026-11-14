@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { config, validateProviderConfiguration, assertProductionReadiness } from './config.js';
-import { getDefaultModel } from './llm.js';
+import { getDefaultModel, isModelAllowed } from './llm.js';
 import { paraphraseRouter } from './routes/paraphrase.js';
 import { grammarRouter } from './routes/grammar.js';
 import { humanizeRouter } from './routes/humanize.js';
@@ -22,42 +22,94 @@ const __dirname = path.dirname(__filename);
 
 export const app: Express = express();
 
-// 1. Security & Headers
+// Behind Render / other reverse proxies the client IP arrives in X-Forwarded-For.
+// Trusting one hop makes rate limiting per-client instead of per-proxy.
+app.set('trust proxy', config.trustProxy);
+
+// 1. Security & Hardened Headers
 app.use(helmet({
-  contentSecurityPolicy: false // Allows seamless local dev & embedded views
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: [
+        "'self'",
+        ...(config.env === 'production' ? [] : ['http://localhost:*', 'http://127.0.0.1:*']),
+        ...config.corsOrigins
+      ],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: config.env === 'production' ? [] : null
+    }
+  },
+  crossOriginEmbedderPolicy: false
 }));
 
 // 2. Strict CORS Configuration
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow local development and local loopback
-    if (!origin || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-      return callback(null, true);
+const isLocalOrigin = (origin: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+app.use(cors((req, callback) => {
+  const origin = req.headers.origin;
+  let allowed = false;
+  if (!origin) {
+    allowed = true; // same-origin navigation, curl, health checks
+  } else {
+    let sameHost = false;
+    try {
+      sameHost = new URL(origin).host === req.headers.host; // frontend served by this server
+    } catch {
+      sameHost = false;
     }
-    if (config.corsOrigin && origin === config.corsOrigin) {
-      return callback(null, true);
-    }
-    // Block unauthorized origins in production
-    if (config.env === 'production') {
-      return callback(new Error('CORS origin rejected by security policy'));
-    }
-    return callback(null, true);
-  },
-  credentials: true
+    allowed =
+      sameHost ||
+      config.corsOrigins.includes(origin) ||
+      (config.env !== 'production' && isLocalOrigin(origin));
+  }
+
+  if (!allowed && config.env === 'production') {
+    return callback(new Error('CORS origin rejected by security policy'));
+  }
+  callback(null, { origin: allowed, credentials: true });
 }));
 
 // 3. Body Parser with Generous Limit for Document Processing (10mb)
 app.use(express.json({ limit: '10mb' }));
 
-// 4. Rate Limiting (Sliding window)
+// 4. Rate Limiting
+// General limit for all API traffic (includes cheap GETs such as task polling)
 const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 300, // Limit each IP to 300 requests per minute
+  windowMs: 60 * 1000,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait before retrying.' }
 });
 app.use('/api/', apiLimiter);
+
+// Stricter limit for endpoints that spend AI provider tokens
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: config.aiRequestsPerMinute,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'AI request limit reached. Please wait a minute and try again.' }
+});
+for (const route of ['/api/paraphrase', '/api/grammar', '/api/humanize', '/api/summarize', '/api/translate', '/api/chat', '/api/suggestions']) {
+  app.post(route, aiLimiter);
+}
+
+// 4b. Model allowlist: clients may not select arbitrary (e.g. expensive) provider models
+app.use('/api/', (req: Request, res: Response, next: NextFunction) => {
+  const requested = req.body?.model;
+  if (requested !== undefined && (typeof requested !== 'string' || !isModelAllowed(requested))) {
+    return res.status(400).json({
+      error: `Model '${String(requested)}' is not allowed. Configure ALLOWED_MODELS on the server to permit it.`
+    });
+  }
+  return next();
+});
 
 // 5. Mount Feature Routers
 app.use('/api/paraphrase', paraphraseRouter);
@@ -80,10 +132,12 @@ app.get('/api/health', (req: Request, res: Response) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'ShivQuill AI Writing Platform',
-    version: '2.0.0',
+    version: '2.2.0',
     environment: config.env,
     provider: config.requestType,
+    providerStatus: isMock ? 'mock_simulation' : isUnconfigured ? 'unconfigured' : providerStatus.ready ? 'ready' : 'error',
     model: getDefaultModel(),
+    allowedModels: Array.from(new Set([getDefaultModel(), ...config.allowedModels])),
     engineStatus: isMock ? 'mock_test' : isUnconfigured ? 'unconfigured' : 'active',
     isMockMode: isMock,
     isUnconfigured: isUnconfigured,
@@ -108,6 +162,15 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
 
 // Centralized Safe Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  if (err?.message === 'CORS origin rejected by security policy') {
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body too large' });
+  }
+  if (err?.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Malformed JSON body' });
+  }
   console.error('Unhandled Application Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',

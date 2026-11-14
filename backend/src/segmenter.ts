@@ -60,3 +60,41 @@ export function chunkSentences(
 
   return chunks;
 }
+
+export interface ParagraphLayout {
+  /** Whitespace before the first paragraph */
+  leading: string;
+  /** Trimmed paragraph texts */
+  paragraphs: string[];
+  /** Exact whitespace that followed each paragraph (same length as `paragraphs`) */
+  separators: string[];
+}
+
+/**
+ * Splits text into paragraphs (one per non-empty line) while recording the exact whitespace
+ * between them, so a rewritten document can be reassembled with its original line breaks,
+ * blank lines and indentation.
+ */
+export function splitParagraphsWithLayout(text: string): ParagraphLayout {
+  const leading = (text.match(/^\s*/) || [''])[0];
+  const paragraphs: string[] = [];
+  const separators: string[] = [];
+  const re = /[^\r\n]+/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(text)) !== null) {
+    const line = m[0];
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const contentStart = m.index + line.indexOf(trimmed);
+    const contentEnd = contentStart + trimmed.length;
+    paragraphs.push(trimmed);
+    // Separator = whitespace from content end up to the next non-whitespace char
+    let sepEnd = contentEnd;
+    while (sepEnd < text.length && /\s/.test(text[sepEnd])) sepEnd++;
+    separators.push(text.slice(contentEnd, sepEnd));
+    re.lastIndex = Math.max(re.lastIndex, sepEnd);
+  }
+
+  return { leading: paragraphs.length ? leading : '', paragraphs, separators };
+}
