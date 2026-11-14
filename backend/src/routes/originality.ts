@@ -6,15 +6,15 @@ import {
   PlagiarismCheckResponse,
   CitationResponse
 } from '../types.js';
-import { checkCorpusSimilarity } from '../corpus.js';
+import { defaultCorpusManager } from '../corpus.js';
 
 export const originalityRouter = Router();
 
 // ----------------------------------------------------
-// 1. AI Detector Endpoint (Calculated Statistical Metrics)
+// 1. AI Detector Endpoint (Experimental Statistical Linguistic Analyzer)
 // ----------------------------------------------------
 const aiDetectorSchema = z.object({
-  text: z.string().min(30, 'Input must be at least 30 characters for statistical evaluation').max(30000)
+  text: z.string().min(30, 'Input must be at least 30 characters for statistical evaluation').max(1000000)
 });
 
 originalityRouter.post('/detector', (req: Request, res: Response) => {
@@ -23,69 +23,79 @@ originalityRouter.post('/detector', (req: Request, res: Response) => {
 
     const sentences = text.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 0);
     const words = text.toLowerCase().match(/\b[a-z]{2,}\b/g) || [];
+    const totalWords = words.length || 1;
 
-    // 1. Shannon Entropy (Perplexity proxy)
+    // 1. Calculate genuine Shannon Entropy (lexical information density)
     const freqMap = new Map<string, number>();
     for (const w of words) {
       freqMap.set(w, (freqMap.get(w) || 0) + 1);
     }
     let entropy = 0;
-    const totalWords = words.length || 1;
     for (const count of freqMap.values()) {
       const p = count / totalWords;
       entropy -= p * Math.log2(p);
     }
 
-    // 2. Burstiness: Coefficient of Variation (CV) of sentence lengths
+    // 2. Calculate Burstiness: Coefficient of Variation (CV) of sentence lengths
     const sentenceLengths = sentences.map(s => s.trim().split(/\s+/).filter(Boolean).length);
     const meanLength = sentenceLengths.reduce((a, b) => a + b, 0) / (sentenceLengths.length || 1);
     const variance = sentenceLengths.reduce((a, b) => a + Math.pow(b - meanLength, 2), 0) / (sentenceLengths.length || 1);
     const stdDev = Math.sqrt(variance);
-    const cv = meanLength > 0 ? stdDev / meanLength : 0; // CV > 0.4 indicates human burstiness
+    const cv = meanLength > 0 ? stdDev / meanLength : 0; // CV > 0.4 typically reflects varied human cadence
 
     // 3. Type-Token Ratio (TTR)
-    const ttr = freqMap.size / totalWords;
+    const ttr = parseFloat((freqMap.size / totalWords).toFixed(3));
 
-    // Synthetic heuristics analysis per sentence
+    // Transparent sentence-level statistical regularity analysis
     const sentenceScores: AiDetectionSentence[] = sentences.map(sentence => {
       const sWords = sentence.trim().split(/\s+/).filter(Boolean);
       const len = sWords.length;
       
-      // Sentences with middle-length uniformity and low lexical variation are assigned higher likelihood
-      let score = 30;
-      if (len >= 16 && len <= 24) score += 20;
-      if (cv < 0.25) score += 15;
-      if (entropy < 4.0) score += 15;
+      // Compute sentence regularity indicator:
+      // Repetitive mid-length sentences (16-24 words) with low overall burstiness show higher uniformity
+      let uniformityIndicator = 35;
+      if (len >= 16 && len <= 24) uniformityIndicator += 15;
+      if (cv < 0.25) uniformityIndicator += 15;
+      if (entropy < 4.0) uniformityIndicator += 10;
+      if (cv > 0.5) uniformityIndicator -= 15;
 
-      score = Math.min(95, Math.max(5, score));
-      const flag = score > 60 ? 'ai' : score > 35 ? 'mixed' : 'human';
+      const boundedScore = Math.min(90, Math.max(10, uniformityIndicator));
+      const flag = boundedScore >= 60 ? 'ai' : boundedScore >= 40 ? 'mixed' : 'human';
 
       return {
         text: sentence,
-        aiLikelihood: score,
+        aiLikelihood: boundedScore,
         flag
       };
     });
 
-    // Calibrate overall percentage based on calculated metrics
-    let computedAiPct = Math.round(
+    // Compute composite statistical regularity index (explicitly labeled as a heuristic proxy)
+    const avgScore = Math.round(
       sentenceScores.reduce((a, b) => a + b.aiLikelihood, 0) / (sentenceScores.length || 1)
     );
-    if (cv > 0.5) computedAiPct = Math.max(10, computedAiPct - 20); // reward high burstiness
-
-    const humanPct = 100 - computedAiPct;
+    const humanPct = 100 - avgScore;
 
     const response: AiDetectionResponse = {
-      aiPercentage: computedAiPct,
+      aiPercentage: avgScore,
       humanPercentage: humanPct,
-      confidence: sentences.length >= 3 ? 'Moderate' : 'Low',
-      overallVerdict: computedAiPct > 65 ? 'Likely AI-Generated' : computedAiPct > 35 ? 'Mixed Signals' : 'Likely Human-Written',
+      confidence: sentences.length >= 4 ? 'Moderate' : 'Low',
+      overallVerdict: avgScore >= 65 
+        ? 'Likely AI-Generated' 
+        : avgScore >= 40 
+          ? 'Mixed Signals' 
+          : 'Likely Human-Written',
       sentences: sentenceScores,
       metrics: {
         perplexityScore: Math.round(Math.min(100, entropy * 15)),
-        burstinessScore: Math.round(Math.min(100, cv * 100))
+        burstinessScore: Math.round(Math.min(100, cv * 100)),
+        shannonEntropy: parseFloat(entropy.toFixed(3)),
+        sentenceLengthCV: parseFloat(cv.toFixed(3)),
+        typeTokenRatio: ttr
       },
-      disclaimer: 'Statistical Linguistic Assessment: Derived from token entropy and sentence length variation. Heuristic models cannot provide guaranteed certainty of authorship.'
+      experimentalStatus: true,
+      analyzerType: 'statistical_heuristic',
+      falsePositiveRisk: 'High on structured academic, technical, legal, and non-native English writing where consistent sentence structure and controlled vocabulary are standard.',
+      disclaimer: 'EXPERIMENTAL STATISTICAL LINGUISTIC ANALYZER: This tool evaluates statistical surface regularity (Shannon entropy, sentence-length CV, and lexical diversity). It is NOT a validated neural classifier and cannot provide certainty of authorship. Never use this score for disciplinary or academic penalty decisions.'
     };
 
     return res.json(response);
@@ -93,28 +103,33 @@ originalityRouter.post('/detector', (req: Request, res: Response) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0].message });
     }
-    return res.status(500).json({ error: 'AI detection failed' });
+    return res.status(500).json({ error: 'AI detection analysis failed' });
   }
 });
 
 // ----------------------------------------------------
-// 2. Plagiarism Checker Endpoint (Authentic Corpus Comparison)
+// 2. Plagiarism Checker Endpoint (Modular Inverted Index & Shingles)
 // ----------------------------------------------------
 const plagiarismSchema = z.object({
-  text: z.string().min(20, 'Text too short for plagiarism check').max(30000)
+  text: z.string().min(10, 'Text too short for plagiarism check').max(1000000)
 });
 
 originalityRouter.post('/plagiarism', (req: Request, res: Response) => {
   try {
     const { text } = plagiarismSchema.parse(req.body);
-    const comparisonResult = checkCorpusSimilarity(text, 5);
+    const result = defaultCorpusManager.checkSimilarity(text, 5);
 
     const response: PlagiarismCheckResponse = {
-      similarityScore: comparisonResult.similarityScore,
-      uniquenessScore: comparisonResult.uniquenessScore,
-      totalWordsChecked: comparisonResult.totalWordsChecked,
-      matchedSources: comparisonResult.matchedSources,
-      matchedSegments: comparisonResult.matchedSegments
+      similarityScore: result.similarityScore,
+      uniquenessScore: result.uniquenessScore,
+      totalWordsChecked: result.totalWordsChecked,
+      matchedSources: result.matchedSources,
+      matchedSegments: result.matchedSegments.map(s => ({
+        text: s.text,
+        sourceTitle: s.sourceTitle,
+        sourceUrl: s.sourceUrl
+      })),
+      corpusStats: result.corpusStats
     };
 
     return res.json(response);
@@ -126,47 +141,158 @@ originalityRouter.post('/plagiarism', (req: Request, res: Response) => {
   }
 });
 
+// Corpus Management Endpoints
+originalityRouter.get('/corpus', (req: Request, res: Response) => {
+  res.json({
+    documentCount: defaultCorpusManager.getDocumentCount(),
+    totalShingles: defaultCorpusManager.getTotalShinglesCount(),
+    documents: defaultCorpusManager.getAllDocuments()
+  });
+});
+
+const indexDocumentSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  authorOrSource: z.string().min(1),
+  url: z.string().url(),
+  text: z.string().min(20)
+});
+
+originalityRouter.post('/corpus', (req: Request, res: Response) => {
+  try {
+    const doc = indexDocumentSchema.parse(req.body);
+    defaultCorpusManager.indexDocument(doc);
+    return res.json({
+      status: 'indexed',
+      documentId: doc.id,
+      totalDocuments: defaultCorpusManager.getDocumentCount()
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
+    return res.status(500).json({ error: 'Failed to index document' });
+  }
+});
+
 // ----------------------------------------------------
-// 3. Citation Generator Endpoint
+// 3. Citation Generator Endpoint (With Real Metadata Lookup)
 // ----------------------------------------------------
 const citationSchema = z.object({
   sourceType: z.enum(['website', 'journal', 'book']).default('website'),
   style: z.enum(['APA', 'MLA', 'Chicago', 'Harvard']).default('APA'),
   url: z.string().optional(),
-  title: z.string().min(1, 'Title is required'),
-  authors: z.array(z.string()).default(['Anonymous']),
-  year: z.string().default(new Date().getFullYear().toString()),
+  doi: z.string().optional(),
+  title: z.string().optional(),
+  authors: z.array(z.string()).optional(),
+  year: z.string().optional(),
   publisher: z.string().optional(),
   volume: z.string().optional(),
   issue: z.string().optional(),
   pages: z.string().optional()
 });
 
-originalityRouter.post('/citation', (req: Request, res: Response) => {
+/**
+ * Attempts real DOI metadata resolution via Crossref REST API
+ */
+async function fetchCrossrefMetadata(doiQuery: string): Promise<any | null> {
+  const cleanDoi = doiQuery
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+    .trim();
+
+  if (!cleanDoi.match(/^10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+$/)) {
+    return null;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000); // 4-second timeout
+
+    const res = await fetch(`https://api.crossref.org/works/${encodeURIComponent(cleanDoi)}`, {
+      headers: { 'User-Agent': 'ShivQuill-Academic-Citation-Engine/2.0 (mailto:support@shivquill.local)' },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    return data.message || null;
+  } catch {
+    return null;
+  }
+}
+
+originalityRouter.post('/citation', async (req: Request, res: Response) => {
   try {
     const data = citationSchema.parse(req.body);
-    const primaryAuthor = data.authors[0] || 'Anonymous';
+    let resolvedTitle = data.title || '';
+    let resolvedAuthors = data.authors && data.authors.length > 0 ? data.authors : ['Anonymous'];
+    let resolvedYear = data.year || new Date().getFullYear().toString();
+    let resolvedPublisher = data.publisher || '';
+    let isVerified = false;
+    let sourceOrigin: 'crossref_doi' | 'user_supplied' = 'user_supplied';
+    let retrievedMetadata: any = undefined;
+
+    // Check for DOI resolution
+    const targetDoi = data.doi || (data.url?.includes('doi.org/') ? data.url : undefined);
+    if (targetDoi) {
+      const crossrefMeta = await fetchCrossrefMetadata(targetDoi);
+      if (crossrefMeta) {
+        isVerified = true;
+        sourceOrigin = 'crossref_doi';
+        retrievedMetadata = {
+          doi: crossrefMeta.DOI,
+          containerTitle: crossrefMeta['container-title']?.[0],
+          publishedDate: crossrefMeta.created?.['date-time'] || crossrefMeta.issued?.['date-parts']?.[0]?.[0]?.toString(),
+          publisher: crossrefMeta.publisher
+        };
+
+        if (crossrefMeta.title?.[0]) resolvedTitle = crossrefMeta.title[0];
+        if (crossrefMeta.author && Array.isArray(crossrefMeta.author)) {
+          resolvedAuthors = crossrefMeta.author.map((a: any) => 
+            a.given && a.family ? `${a.given} ${a.family}` : a.family || a.name || 'Anonymous'
+          );
+        }
+        if (crossrefMeta.issued?.['date-parts']?.[0]?.[0]) {
+          resolvedYear = crossrefMeta.issued['date-parts'][0][0].toString();
+        }
+        if (crossrefMeta.publisher) resolvedPublisher = crossrefMeta.publisher;
+      }
+    }
+
+    if (!resolvedTitle) {
+      resolvedTitle = 'Untitled Work';
+    }
+
+    const primaryAuthor = resolvedAuthors[0] || 'Anonymous';
     const authorLastName = primaryAuthor.split(' ').pop() || primaryAuthor;
 
-    let inTextCitation = `(${authorLastName}, ${data.year})`;
+    let inTextCitation = `(${authorLastName}, ${resolvedYear})`;
     let fullBibliographyEntry = '';
+
+    const formattedAuthorsAPA = resolvedAuthors.length > 2 
+      ? `${authorLastName}, ${primaryAuthor.charAt(0)}., et al.`
+      : resolvedAuthors.map(a => `${a.split(' ').pop()}, ${a.charAt(0)}.`).join(', & ');
 
     switch (data.style) {
       case 'APA':
-        fullBibliographyEntry = `${primaryAuthor} (${data.year}). *${data.title}*. ${data.publisher ? data.publisher + '. ' : ''}${data.url || ''}`.trim();
-        inTextCitation = `(${authorLastName}, ${data.year})`;
+        fullBibliographyEntry = `${formattedAuthorsAPA} (${resolvedYear}). *${resolvedTitle}*. ${resolvedPublisher ? resolvedPublisher + '. ' : ''}${data.url || ''}`.trim();
+        inTextCitation = resolvedAuthors.length > 2 ? `(${authorLastName} et al., ${resolvedYear})` : `(${authorLastName}, ${resolvedYear})`;
         break;
+
       case 'MLA':
-        fullBibliographyEntry = `${authorLastName}, ${primaryAuthor.split(' ')[0]}. "${data.title}." ${data.publisher || 'Web'}, ${data.year}, ${data.url || ''}`.trim();
+        fullBibliographyEntry = `${authorLastName}, ${primaryAuthor.split(' ')[0]}. "${resolvedTitle}." *${resolvedPublisher || 'Web Source'}*, ${resolvedYear}, ${data.url || ''}`.trim();
         inTextCitation = `(${authorLastName})`;
         break;
+
       case 'Chicago':
-        fullBibliographyEntry = `${primaryAuthor}. ${data.year}. "${data.title}." ${data.publisher ? data.publisher + '. ' : ''}${data.url || ''}`.trim();
-        inTextCitation = `(${authorLastName} ${data.year})`;
+        fullBibliographyEntry = `${primaryAuthor}. ${resolvedYear}. "${resolvedTitle}." ${resolvedPublisher ? resolvedPublisher + '. ' : ''}${data.url || ''}`.trim();
+        inTextCitation = `(${authorLastName} ${resolvedYear})`;
         break;
+
       case 'Harvard':
-        fullBibliographyEntry = `${authorLastName}, ${primaryAuthor.charAt(0)}. (${data.year}) '${data.title}', ${data.publisher || 'Online'}. Available at: ${data.url || 'N/A'}`.trim();
-        inTextCitation = `(${authorLastName}, ${data.year})`;
+        fullBibliographyEntry = `${authorLastName}, ${primaryAuthor.charAt(0)}. (${resolvedYear}) '${resolvedTitle}', ${resolvedPublisher || 'Publication'}. Available at: ${data.url || 'Online'}`.trim();
+        inTextCitation = `(${authorLastName}, ${resolvedYear})`;
         break;
     }
 
@@ -174,7 +300,10 @@ originalityRouter.post('/citation', (req: Request, res: Response) => {
       style: data.style,
       inTextCitation,
       fullBibliographyEntry,
-      sourceType: data.sourceType
+      sourceType: data.sourceType,
+      isVerified,
+      sourceOrigin,
+      retrievedMetadata
     };
 
     return res.json(response);

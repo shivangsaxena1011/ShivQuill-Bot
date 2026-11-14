@@ -1,67 +1,69 @@
-# ShivQuill — Enterprise AI Writing & Paraphrasing Platform
+# ShivQuill v2.1 — Production-Grade AI Writing Platform (Zero-Mock Enforced)
 
-ShivQuill is a production-grade, independently architected AI writing platform built to match the comprehensive feature set of QuillBot. It provides a full suite of writing enhancement tools, intelligent token-level text diffing, multi-provider AI orchestration, and hardened backend security.
+ShivQuill is an independently architected, production-grade AI writing platform designed to match the functional workflows of QuillBot with strict zero-mock enforcement, no artificial user-facing word caps, and transparent originality metrics.
 
 ---
 
 ## 🚀 Key Writing Tools & Capabilities
 
-1. **Paraphraser**:
-   - 9 Distinct Writing Modes: *Standard*, *Fluency*, *Formal*, *Academic*, *Simple*, *Creative*, *Expand*, *Shorten*, and *Custom*.
-   - 4-Tier Synonym Intensity Slider adjusting vocabulary variance.
-   - Interactive Token Diffing: highlights changed words (synonyms, insertions, deletions) with click-to-replace alternative suggestions.
-   - Strict factual invariance: guarantees preservation of proper names, citations, numbers, dates, and measurements.
+1. **Paraphraser (Unconstrained Document Processing)**:
+   - **9 Distinct Writing Modes**: *Standard*, *Fluency*, *Formal*, *Academic*, *Simple*, *Creative*, *Expand*, *Shorten*, and *Custom* (with user-defined style prompts).
+   - **4-Tier Synonym Intensity Slider**: Fine-grained vocabulary variance control.
+   - **Interactive Token Diffing**: Highlights word modifications (synonyms, insertions, deletions) with click-to-cycle alternative suggestions.
+   - **Rolling Context Window**: Passes preceding chunk context to ensure natural transition flow across paragraph boundaries.
+   - **Invariance & Entity Tracking**: Transparently evaluates retention of citations, numbers, dates, URLs, and proper nouns.
+   - **Chunk Orchestrator**: Supports large documents with transient chunk retries, partial recovery, and cancellation without losing completed work.
+   - **Zero User-Facing Limits**: No artificial free-plan caps, subscription gates, or "limit reached" interruptions.
+
 2. **Grammar & Spell Checker**:
-   - Deep structural proofreading across grammar, spelling, punctuation, and style.
-   - Error cards with linguistic explanations and individual or one-click batch acceptance ("Fix All").
-3. **AI Humanizer**:
-   - Analyzes and optimizes *burstiness* (sentence length variation) and conversational rhythm.
-   - Prunes overused LLM cliches (e.g., "furthermore", "tapestry", "crucial") into organic, authentic prose.
-4. **Summarizer**:
-   - Dual Output Formats: Structured Markdown Bullet Points or Cohesive Prose Paragraphs.
-   - 3-Tier Summary Length Slider: Short (1-2 sentences), Medium (balanced), and Long (comprehensive abstract).
-   - Real-time reduction ratio statistics.
-5. **Translator**:
-   - 50+ languages with automatic source language detection and one-click bidirectional language swapping.
-6. **Originality Suite**:
-   - **AI Detector**: Evaluates perplexity and burstiness to compute 0–100% AI likelihood with per-sentence heatmap.
-   - **Plagiarism Checker**: N-gram shingling similarity scanner identifying matching passages and source URLs.
-   - **Citation Generator**: Formats in-text citations and full bibliographies across APA, MLA, Chicago, and Harvard.
-7. **AI Chat Assistant**:
-   - Integrated slide-over writing companion with real-time document context awareness.
+   - Strict structured-output validation across grammar, spelling, punctuation, and style.
+   - Recalibrated character offsets for exact in-text highlighting.
+   - Individual issue replacement and batch "Fix All" correction.
+
+3. **Advanced Writing Suggestions**:
+   - Actionable diagnostics linked to exact character spans in the text.
+   - Five targeted dimensions: **Clarity**, **Conciseness**, **Vocabulary & Repetition**, **Tone & Register**, and **Sentence Restructuring**.
+   - One-click "Apply" button to replace suggestions in-place.
+
+4. **AI Humanizer**:
+   - Rebalances sentence cadence and *burstiness* (sentence length variation).
+   - Prunes synthetic LLM clichés (*furthermore*, *tapestry*, *beacon*, *crucial*) into organic, authentic human prose.
+   - Transparent readability assessment using standard Flesch Reading Ease score and sentence length variance.
+
+5. **Summarizer**:
+   - **Dual Output Formats**: Structured Markdown Bullet Points or Cohesive Prose Paragraphs.
+   - **3-Tier Summary Length**: Short (~15-20%), Medium (~30-40%), and Long (~50-60%).
+   - Dynamic word reduction ratio calculation.
+
+6. **Translator**:
+   - High-fidelity multilingual translation across 50+ languages (Spanish, French, German, Chinese, Hindi, Japanese, Arabic, etc.).
+   - Automatic script-based source language detection and one-click bidirectional language swap.
+
+7. **Originality Suite**:
+   - **AI Detector (Experimental Linguistic Analyzer)**: Evaluates lexical surface regularity via Shannon entropy ($H$), sentence length coefficient of variation ($CV$), and Type-Token Ratio ($TTR$). Includes explicit false-positive risk warnings for academic and technical text.
+   - **Plagiarism Scanner**: Modular $k$-gram shingling, 64-hash MinHash Jaccard estimation, and inverted indexing against verified open-access reference literature (arXiv, W3C, IPCC) with zero synthetic example domains.
+   - **Citation Generator**: Formats academic citations across APA (7th ed), MLA (9th ed), Chicago (17th ed), and Harvard. Includes automated DOI bibliographic lookup via Crossref REST API.
+
+8. **AI Chat Assistant**:
+   - Slide-over writing companion with sanitized, prompt-injection-safe document context awareness.
 
 ---
 
-## 🛡️ Architecture & Security Highlights
+## 🛡️ Architecture & Zero-Mock Security Policy
 
-- **Backend**: Node.js, Express, TypeScript, Helmet, CORS allowlisting, and sliding-window rate limiting.
+- **ZERO-MOCK POLICY**: Production startup unconditionally rejects `MOCK` mode and missing credentials (`assertProductionReadiness`). `MOCK` is restricted strictly to isolated automated unit test suites.
+- **Chunk Orchestration**: Implements `DocumentProcessingJob` with transient retries (2 attempts with exponential backoff), partial recovery, and cancellation via `/api/tasks/:id/cancel`.
 - **Defensive Engineering**: Solved Phrasing-Bot's zero-chunk infinite loop vulnerability (`Math.max(1, chunkSize)`).
 - **Task Management**: Auto-expiring 15-minute TTL task queue preventing memory leaks.
-- **Frontend**: Vue 3 (Composition API), TypeScript, Vite, Pinia, and custom responsive CSS.
-- **AI Orchestration**: Multi-provider support (Groq Llama-3.3-70B, OpenAI GPT-4o-mini, OpenRouter, Custom vLLM/Ollama, and offline Mock engine).
+- **Hardened Middleware**: Helmet security headers, CORS origin allowlisting, and 300 req/min sliding-window rate limiting.
 
 ---
 
 ## 🧪 Testing & Verification
 
-- **Automated Tests**: 18 unit and integration tests passing with 100% success (`npm test`).
-- **Benchmark Suite**: 200 synthetic writing samples evaluated across 9 dimensions with a 100% factual invariance pass rate (`npm run benchmark`).
-
----
-
-## 📖 Research & Audit Documentation
-
-Comprehensive technical analysis reports are preserved in `docs/`:
-- [`docs/research/evidence-and-limitations.md`](docs/research/evidence-and-limitations.md): REA verification, Cloudflare Turnstile challenge observation (`ev_4e2ccf48e1c0f58c8c4842846fb3ff5b4df8220d2f771573a18ab57d594112f0`), and ethical boundaries.
-- [`docs/research/quillbot-inventory.md`](docs/research/quillbot-inventory.md): Full product breakdown, free vs. premium tiers, and word limits.
-- [`docs/research/paraphraser-analysis.md`](docs/research/paraphraser-analysis.md): Mode specifications, slider behaviors, and invariant tokens.
-- [`docs/research/phrasing-bot-code-audit.md`](docs/research/phrasing-bot-code-audit.md): Deep architectural code audit of Krisseck/Phrasing-Bot.
-- [`docs/research/phrasing-bot-security-audit.md`](docs/research/phrasing-bot-security-audit.md): Complete vulnerability analysis and remediation guide.
-- [`docs/research/reuse-vs-rebuild.md`](docs/research/reuse-vs-rebuild.md): Architectural decision record on what was preserved vs rebuilt.
-- [`docs/architecture.md`](docs/architecture.md): Full system topology and data flow diagrams.
-- [`docs/feature-parity-assessment.md`](docs/feature-parity-assessment.md): Feature-by-feature parity comparison against QuillBot.
-- [`docs/security.md`](docs/security.md): Threat model and production hardening proofs.
-- [`docs/deployment.md`](docs/deployment.md): Detailed installation and containerization instructions.
+- **Automated Tests**: 30 unit and integration tests passing (`npm test`).
+- **Benchmark Suite**: 200 synthetic writing samples evaluated across 9 categories (`npm run benchmark:mock`).
+- **Independent Evaluation**: Deterministic entity invariance checks separated from qualitative semantic equivalence; simulated execution speed clearly distinguished from remote network inference.
 
 ---
 
@@ -71,14 +73,15 @@ Comprehensive technical analysis reports are preserved in `docs/`:
 # 1. Install dependencies
 npm run install:all
 
-# 2. Run unit and integration tests
-npm test
+# 2. Configure environment
+cp .env.example .env
+# Edit .env and supply your GROQ_API_KEY or OPENAI_API_KEY
 
-# 3. Run 200-sample benchmark
-npm run benchmark
+# 3. Run unit and integration tests
+npm test
 
 # 4. Build and start production server
 npm run build
 npm start
 ```
-The server will be live on `http://localhost:5000`.
+The application will be live at `http://localhost:5000`.

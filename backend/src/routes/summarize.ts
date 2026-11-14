@@ -7,7 +7,7 @@ import { SummarizeResponse } from '../types.js';
 export const summarizeRouter = Router();
 
 const summarizeSchema = z.object({
-  text: z.string().min(1, 'Input text cannot be empty').max(30000, 'Input exceeds maximum character limit of 30,000'),
+  text: z.string().min(1, 'Input text cannot be empty').max(1000000, 'Input exceeds maximum payload limit of 1,000,000 characters'),
   format: z.enum(['paragraph', 'bullet']).default('paragraph'),
   length: z.enum(['short', 'medium', 'long']).default('medium'),
   model: z.string().optional()

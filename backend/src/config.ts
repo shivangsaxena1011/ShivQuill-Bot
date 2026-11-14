@@ -1,10 +1,55 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+export type RequestType = 'GROQ' | 'OPENROUTER' | 'OPENAI' | 'CUSTOM' | 'MOCK' | 'UNCONFIGURED';
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+const explicitRequestType = process.env.REQUEST_TYPE ? process.env.REQUEST_TYPE.toUpperCase() as RequestType : undefined;
+
+function resolveRequestType(): RequestType {
+  // ZERO-MOCK POLICY: Production environments unconditionally reject MOCK
+  if (explicitRequestType === 'MOCK') {
+    if (nodeEnv === 'production') {
+      throw new Error(
+        '[ShivQuill Security] ZERO-MOCK POLICY VIOLATION: REQUEST_TYPE=MOCK is strictly forbidden in production. ' +
+        'ShivQuill requires a legitimate configured AI provider (GROQ, OPENAI, OPENROUTER, or CUSTOM).'
+      );
+    }
+    return 'MOCK';
+  }
+
+  if (explicitRequestType) {
+    return explicitRequestType;
+  }
+
+  // Auto-detect based on available API keys if not explicitly specified
+  if (process.env.GROQ_API_KEY) return 'GROQ';
+  if (process.env.OPENAI_API_KEY) return 'OPENAI';
+  if (process.env.OPENROUTER_API_KEY) return 'OPENROUTER';
+  if (process.env.CUSTOM_API_KEY || process.env.CUSTOM_API_BASE_URL) return 'CUSTOM';
+
+  // In test environment, allow MOCK only if explicitly in test runner
+  if (nodeEnv === 'test') {
+    return 'MOCK';
+  }
+
+  // In production, failure to configure an AI provider is a fatal error
+  if (nodeEnv === 'production') {
+    throw new Error(
+      '[ShivQuill Startup Error] No AI provider configured in production. ' +
+      'Please configure GROQ_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, or CUSTOM_API_BASE_URL.'
+    );
+  }
+
+  // In development, mark as UNCONFIGURED rather than silently defaulting to MOCK
+  return 'UNCONFIGURED';
+}
+
 export const config = {
+  env: nodeEnv,
   port: parseInt(process.env.PORT || '5000', 10),
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  requestType: (process.env.REQUEST_TYPE || 'MOCK').toUpperCase(),
+  requestType: resolveRequestType(),
   sentencesInPrompt: Math.max(1, parseInt(process.env.SENTENCES_IN_PROMPT || '3', 10)),
   
   // Provider configs
@@ -29,3 +74,76 @@ export const config = {
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
   }
 };
+
+/**
+ * Validates that the active provider has valid credentials
+ */
+export function validateProviderConfiguration(): { ready: boolean; provider: RequestType; message: string } {
+  if (config.requestType === 'MOCK') {
+    if (config.env === 'production') {
+      return {
+        ready: false,
+        provider: 'MOCK',
+        message: 'CRITICAL SECURITY ERROR: MOCK mode is strictly prohibited in production.'
+      };
+    }
+    return {
+      ready: true,
+      provider: 'MOCK',
+      message: 'Running in simulated MOCK mode (automated testing only).'
+    };
+  }
+
+  if (config.requestType === 'UNCONFIGURED') {
+    return {
+      ready: false,
+      provider: 'UNCONFIGURED',
+      message: 'No AI provider is configured. Please provide an API key in .env or configure a provider.'
+    };
+  }
+
+  let hasKey = false;
+  switch (config.requestType) {
+    case 'GROQ':
+      hasKey = !!config.groq.apiKey;
+      break;
+    case 'OPENAI':
+      hasKey = !!config.openai.apiKey;
+      break;
+    case 'OPENROUTER':
+      hasKey = !!config.openrouter.apiKey;
+      break;
+    case 'CUSTOM':
+      hasKey = !!(config.custom.apiKey || config.custom.baseUrl);
+      break;
+  }
+
+  if (!hasKey) {
+    return {
+      ready: false,
+      provider: config.requestType,
+      message: `AI provider '${config.requestType}' is selected but required credentials are missing.`
+    };
+  }
+
+  return {
+    ready: true,
+    provider: config.requestType,
+    message: `AI provider '${config.requestType}' is configured and ready.`
+  };
+}
+
+/**
+ * Asserts production readiness before listening on port
+ */
+export function assertProductionReadiness(): void {
+  if (config.env === 'production') {
+    if (config.requestType === 'MOCK' || config.requestType === 'UNCONFIGURED') {
+      throw new Error(`[ShivQuill Production Assertion Failed] Cannot start production server with provider '${config.requestType}'.`);
+    }
+    const val = validateProviderConfiguration();
+    if (!val.ready) {
+      throw new Error(`[ShivQuill Production Assertion Failed] ${val.message}`);
+    }
+  }
+}

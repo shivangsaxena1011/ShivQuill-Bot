@@ -5,7 +5,8 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { config } from './config.js';
+import { config, validateProviderConfiguration, assertProductionReadiness } from './config.js';
+import { getDefaultModel } from './llm.js';
 import { paraphraseRouter } from './routes/paraphrase.js';
 import { grammarRouter } from './routes/grammar.js';
 import { humanizeRouter } from './routes/humanize.js';
@@ -14,6 +15,7 @@ import { translateRouter } from './routes/translate.js';
 import { originalityRouter } from './routes/originality.js';
 import { chatRouter } from './routes/chat.js';
 import { tasksRouter } from './routes/tasks.js';
+import { suggestionsRouter } from './routes/suggestions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,7 +38,7 @@ app.use(cors({
       return callback(null, true);
     }
     // Block unauthorized origins in production
-    if (process.env.NODE_ENV === 'production') {
+    if (config.env === 'production') {
       return callback(new Error('CORS origin rejected by security policy'));
     }
     return callback(null, true);
@@ -44,13 +46,13 @@ app.use(cors({
   credentials: true
 }));
 
-// 3. Body Parser with Size Limits (Prevents payload inflation)
-app.use(express.json({ limit: '2mb' }));
+// 3. Body Parser with Generous Limit for Document Processing (10mb)
+app.use(express.json({ limit: '10mb' }));
 
 // 4. Rate Limiting (Sliding window)
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 200, // Limit each IP to 200 requests per minute
+  max: 300, // Limit each IP to 300 requests per minute
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait before retrying.' }
@@ -66,16 +68,26 @@ app.use('/api/translate', translateRouter);
 app.use('/api/originality', originalityRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/tasks', tasksRouter);
+app.use('/api/suggestions', suggestionsRouter);
 
-// Health Check
+// Health & Engine Status Check
 app.get('/api/health', (req: Request, res: Response) => {
+  const providerStatus = validateProviderConfiguration();
+  const isMock = config.requestType === 'MOCK';
+  const isUnconfigured = config.requestType === 'UNCONFIGURED';
+
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'ShivQuill AI Writing Platform',
-    version: '1.0.0',
+    version: '2.0.0',
+    environment: config.env,
     provider: config.requestType,
-    isMockMode: config.requestType === 'MOCK'
+    model: getDefaultModel(),
+    engineStatus: isMock ? 'mock_test' : isUnconfigured ? 'unconfigured' : 'active',
+    isMockMode: isMock,
+    isUnconfigured: isUnconfigured,
+    providerMessage: providerStatus.message
   });
 });
 
@@ -99,14 +111,19 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled Application Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred'
+    message: config.env === 'development' ? err.message : 'An unexpected error occurred'
   });
 });
 
 // Server Startup
 if (process.env.NODE_ENV !== 'test') {
+  assertProductionReadiness();
+  const validation = validateProviderConfiguration();
+  console.log(`[ShivQuill Backend] Initializing in ${config.env.toUpperCase()} environment...`);
+  console.log(`[ShivQuill Backend] Provider: ${config.requestType} (${getDefaultModel()})`);
+  console.log(`[ShivQuill Backend] Status: ${validation.message}`);
+
   app.listen(config.port, () => {
     console.log(`[ShivQuill Backend] Server listening on http://localhost:${config.port}`);
-    console.log(`[ShivQuill Backend] Active Provider Mode: ${config.requestType}`);
   });
 }

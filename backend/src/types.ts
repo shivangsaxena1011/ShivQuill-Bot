@@ -26,6 +26,14 @@ export interface DiffSpan {
   alternatives?: string[];
 }
 
+export interface SemanticConsistencyReport {
+  checkedEntities: string[];
+  preservedCount: number;
+  totalCount: number;
+  preservationRate: number; // 0 - 100
+  notes: string;
+}
+
 export interface ParaphraseResponse {
   originalText: string;
   paraphrasedText: string;
@@ -34,6 +42,7 @@ export interface ParaphraseResponse {
   diffSpans: DiffSpan[];
   wordCountOriginal: number;
   wordCountAltered: number;
+  semanticConsistency?: SemanticConsistencyReport;
 }
 
 export interface GrammarIssue {
@@ -72,6 +81,7 @@ export interface HumanizeResponse {
     burstiness: 'High' | 'Natural' | 'Moderate';
     flowScore: number; // 0 - 100
     tone: string;
+    fleschReadingEase?: number;
   };
   diffSpans: DiffSpan[];
 }
@@ -121,14 +131,21 @@ export interface AiDetectionResponse {
   metrics: {
     perplexityScore: number;
     burstinessScore: number;
+    shannonEntropy: number;
+    sentenceLengthCV: number;
+    typeTokenRatio: number;
   };
+  experimentalStatus: boolean;
+  analyzerType: 'statistical_heuristic';
+  falsePositiveRisk: string;
   disclaimer: string;
 }
 
 export interface PlagiarismSourceMatch {
+  id: string;
   url: string;
   title: string;
-  domain: string;
+  authorOrSource: string;
   matchedPercent: number;
   matchedText: string;
 }
@@ -140,8 +157,15 @@ export interface PlagiarismCheckResponse {
   matchedSources: PlagiarismSourceMatch[];
   matchedSegments: {
     text: string;
+    sourceTitle?: string;
     sourceUrl?: string;
   }[];
+  corpusStats: {
+    indexedDocuments: number;
+    totalCorpusShingles: number;
+    searchedScope: string;
+    note: string;
+  };
 }
 
 export interface CitationRequest {
@@ -163,6 +187,14 @@ export interface CitationResponse {
   inTextCitation: string;
   fullBibliographyEntry: string;
   sourceType: string;
+  isVerified: boolean;
+  sourceOrigin: 'crossref_doi' | 'user_supplied';
+  retrievedMetadata?: {
+    doi?: string;
+    containerTitle?: string;
+    publishedDate?: string;
+    publisher?: string;
+  };
 }
 
 export interface ChatMessage {
@@ -183,3 +215,28 @@ export interface TaskStatus<T = any> {
   result?: T;
   createdAt: number;
 }
+
+export interface WritingSuggestion {
+  id: string;
+  type: 'clarity' | 'conciseness' | 'vocabulary' | 'tone' | 'restructuring' | 'academic';
+  originalText: string;
+  suggestedText: string;
+  explanation: string;
+  start: number;
+  end: number;
+}
+
+export interface WritingSuggestionsResponse {
+  originalText: string;
+  suggestions: WritingSuggestion[];
+  editorialSummary?: string;
+  stats: {
+    totalSuggestions: number;
+    clarityCount: number;
+    concisenessCount: number;
+    vocabularyCount: number;
+    toneCount: number;
+    restructuringCount: number;
+  };
+}
+

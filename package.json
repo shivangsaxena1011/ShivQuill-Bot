@@ -10,6 +10,7 @@
     "build": "npm run build:backend && npm run build:frontend",
     "test": "npm --prefix backend test",
     "benchmark": "node benchmarks/generate_samples.js && node benchmarks/run_benchmark.js",
+    "benchmark:mock": "node benchmarks/generate_samples.js && node benchmarks/run_benchmark.js --mock",
     "start": "node backend/dist/index.js",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev"

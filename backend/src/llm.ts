@@ -3,9 +3,16 @@ import { config } from './config.js';
 
 let openaiClient: OpenAI | null = null;
 
-function getClient(): OpenAI | null {
+function getClient(): OpenAI {
   if (config.requestType === 'MOCK') {
-    return null;
+    throw new Error('Attempted to initialize OpenAI client in MOCK mode.');
+  }
+
+  if (config.requestType === 'UNCONFIGURED') {
+    throw new Error(
+      'No AI provider is configured. Please configure a valid provider (e.g. GROQ_API_KEY, OPENAI_API_KEY) in .env, ' +
+      'or set REQUEST_TYPE=MOCK strictly for offline test execution.'
+    );
   }
 
   if (openaiClient) {
@@ -36,13 +43,17 @@ function getClient(): OpenAI | null {
       throw new Error(`Unsupported AI Provider: ${config.requestType}`);
   }
 
-  if (!apiKey) {
-    throw new Error(`AI Provider '${config.requestType}' is selected but no API key is configured. Please provide the appropriate API key in your environment.`);
+  if (!apiKey && config.requestType !== 'CUSTOM') {
+    throw new Error(
+      `AI Provider '${config.requestType}' is selected but no API key is configured. ` +
+      `Please provide the appropriate API key in your environment.`
+    );
   }
 
   openaiClient = new OpenAI({
-    apiKey,
-    baseURL: baseUrl
+    apiKey: apiKey || 'dummy-key-for-local-custom-llm',
+    baseURL: baseUrl,
+    timeout: 60000 // 60s timeout
   });
 
   return openaiClient;
@@ -54,16 +65,25 @@ export async function executeLlmCompletion(
   modelOverride?: string,
   temperature = 0.3
 ): Promise<string> {
-  // If explicitly configured for MOCK mode (e.g. testing), run the simulated engine
+  // ZERO-MOCK POLICY: If in production, strictly forbid mock execution
+  if (config.env === 'production' && config.requestType === 'MOCK') {
+    throw new Error('[ShivQuill Security] ZERO-MOCK POLICY: MOCK execution is forbidden in production.');
+  }
+
+  // If explicitly configured for MOCK mode in non-production (e.g. testing), run the simulated engine
   if (config.requestType === 'MOCK') {
     return executeSimulatedLlmCompletion(systemPrompt, userPrompt);
   }
 
-  const client = getClient();
-  if (!client) {
-    throw new Error(`Provider ${config.requestType} client could not be initialized.`);
+  if (config.requestType === 'UNCONFIGURED') {
+    throw new Error(
+      'ShivQuill is running in unconfigured mode. To perform live AI operations, ' +
+      'please configure a valid provider (e.g. GROQ_API_KEY or OPENAI_API_KEY) in .env, ' +
+      'or set REQUEST_TYPE=MOCK for local testing.'
+    );
   }
 
+  const client = getClient();
   const model = modelOverride || getDefaultModel();
 
   try {
@@ -84,6 +104,10 @@ export async function executeLlmCompletion(
       content = content.slice(1, -1);
     }
 
+    if (!content) {
+      throw new Error('AI Provider returned an empty completion response.');
+    }
+
     return content;
   } catch (error: any) {
     console.error(`[ShivQuill LLM] Error calling provider ${config.requestType}:`, error.message || error);
@@ -92,7 +116,7 @@ export async function executeLlmCompletion(
   }
 }
 
-function getDefaultModel(): string {
+export function getDefaultModel(): string {
   switch (config.requestType) {
     case 'GROQ':
       return config.groq.model;
@@ -102,42 +126,80 @@ function getDefaultModel(): string {
       return config.openai.model;
     case 'CUSTOM':
       return config.custom.model;
+    case 'MOCK':
+      return 'mock-simulator';
     default:
-      return 'gpt-4o-mini';
+      return 'unconfigured';
   }
 }
 
 /**
- * Isolated deterministic mock engine for automated test suites
+ * Isolated deterministic mock engine strictly for automated test suites
  */
 export function executeSimulatedLlmCompletion(systemPrompt: string, userPrompt: string): string {
+  if (config.env === 'production') {
+    throw new Error('[ShivQuill Security] ZERO-MOCK POLICY: Simulated LLM completion cannot run in production.');
+  }
+
+  // Writing Suggestions simulation
+  if (systemPrompt.includes('expert prose and writing editor') || systemPrompt.includes('ACTIONABLE WRITING SUGGESTIONS')) {
+    const suggestions: any[] = [];
+    if (userPrompt.toLowerCase().includes('in order to')) {
+      const idx = userPrompt.toLowerCase().indexOf('in order to');
+      suggestions.push({
+        id: 'sug-1',
+        type: 'conciseness',
+        originalText: 'in order to',
+        suggestedText: 'to',
+        explanation: 'Simplify wordy phrase "in order to" to direct verb infinitive "to".',
+        start: idx,
+        end: idx + 11
+      });
+    }
+    if (userPrompt.toLowerCase().includes('very important')) {
+      const idx = userPrompt.toLowerCase().indexOf('very important');
+      suggestions.push({
+        id: 'sug-2',
+        type: 'vocabulary',
+        originalText: 'very important',
+        suggestedText: 'critical',
+        explanation: 'Elevate weak modifier "very important" to precise adjective "critical".',
+        start: idx,
+        end: idx + 14
+      });
+    }
+    return JSON.stringify({ suggestions });
+  }
+
   // Grammar check simulation
-  if (systemPrompt.includes('JSON object strictly matching this schema') || systemPrompt.includes('proofreader')) {
+  if (systemPrompt.includes('JSON object strictly matching this TypeScript interface') || systemPrompt.includes('proofreader')) {
     const issues: any[] = [];
     let corrected = userPrompt;
 
     if (userPrompt.includes('teh')) {
+      const idx = userPrompt.indexOf('teh');
       corrected = corrected.replace(/teh/g, 'the');
       issues.push({
         id: 'err-1',
         category: 'spelling',
         original: 'teh',
         replacement: 'the',
-        start: userPrompt.indexOf('teh'),
-        end: userPrompt.indexOf('teh') + 3,
+        start: idx,
+        end: idx + 3,
         explanation: 'Corrected spelling typo: "teh" -> "the".'
       });
     }
 
     if (userPrompt.includes('is boom')) {
+      const idx = userPrompt.indexOf('is boom');
       corrected = corrected.replace(/is boom/g, 'is booming');
       issues.push({
         id: 'err-2',
         category: 'grammar',
         original: 'is boom',
         replacement: 'is booming',
-        start: userPrompt.indexOf('is boom'),
-        end: userPrompt.indexOf('is boom') + 7,
+        start: idx,
+        end: idx + 7,
         explanation: 'Verb form error: use progressive participle "booming".'
       });
     }
@@ -149,7 +211,7 @@ export function executeSimulatedLlmCompletion(systemPrompt: string, userPrompt: 
   }
 
   // Summarize simulation
-  if (systemPrompt.includes('analytical summarizer')) {
+  if (systemPrompt.includes('analytical research summarizer') || systemPrompt.includes('analytical summarizer')) {
     if (systemPrompt.includes('Markdown Bullet Points')) {
       const sentences = userPrompt.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 0);
       return sentences.slice(0, 3).map(s => `• ${s.trim()}`).join('\n');
@@ -159,12 +221,12 @@ export function executeSimulatedLlmCompletion(systemPrompt: string, userPrompt: 
   }
 
   // Translation simulation
-  if (systemPrompt.includes('multilingual translator')) {
+  if (systemPrompt.includes('multilingual translator') || systemPrompt.includes('culturally fluent translator')) {
     return `[Translated]: ${userPrompt}`;
   }
 
   // Humanize simulation
-  if (systemPrompt.includes('humanize')) {
+  if (systemPrompt.includes('humanize') || systemPrompt.includes('prose stylist')) {
     return userPrompt
       .replace(/Furthermore,/g, 'Also,')
       .replace(/In summary,/g, 'To sum up,')
@@ -173,30 +235,30 @@ export function executeSimulatedLlmCompletion(systemPrompt: string, userPrompt: 
   }
 
   // Paraphrasing simulation by mode
-  if (systemPrompt.includes('academic tone')) {
+  if (systemPrompt.includes('academic register') || systemPrompt.includes('academic tone')) {
     return userPrompt
-      .replace(/good/gi, 'advantageous')
-      .replace(/show/gi, 'demonstrate')
-      .replace(/big/gi, 'substantial')
-      .replace(/make/gi, 'generate');
+      .replace(/\bgood\b/gi, 'advantageous')
+      .replace(/\bshow\b/gi, 'demonstrate')
+      .replace(/\bbig\b/gi, 'substantial')
+      .replace(/\bmake\b/gi, 'generate');
   }
 
-  if (systemPrompt.includes('formal tone') || systemPrompt.includes('professional')) {
+  if (systemPrompt.includes('professional') || systemPrompt.includes('authoritative')) {
     return userPrompt
-      .replace(/help/gi, 'assist')
-      .replace(/need/gi, 'require')
-      .replace(/get/gi, 'obtain')
-      .replace(/buy/gi, 'purchase');
+      .replace(/\bhelp\b/gi, 'assist')
+      .replace(/\bneed\b/gi, 'require')
+      .replace(/\bget\b/gi, 'obtain')
+      .replace(/\bbuy\b/gi, 'purchase');
   }
 
   if (systemPrompt.includes('plain English') || systemPrompt.includes('simple')) {
     return userPrompt
-      .replace(/utilize/gi, 'use')
-      .replace(/facilitate/gi, 'help')
-      .replace(/substantial/gi, 'large');
+      .replace(/\butilize\b/gi, 'use')
+      .replace(/\bfacilitate\b/gi, 'help')
+      .replace(/\bsubstantial\b/gi, 'large');
   }
 
-  if (systemPrompt.includes('condense') || systemPrompt.includes('shorten')) {
+  if (systemPrompt.includes('condense') || systemPrompt.includes('shorten') || systemPrompt.includes('economical prose')) {
     const sentences = userPrompt.split(/(?<=[.?!])\s+/);
     return sentences.slice(0, Math.max(1, Math.ceil(sentences.length * 0.7))).join(' ');
   }
