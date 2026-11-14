@@ -94,6 +94,13 @@ function getClient(): OpenAI {
   return openaiClient;
 }
 
+const REASONING_MAX_COMPLETION_TOKENS = 16384;
+
+/** Models that emit hidden reasoning tokens before the visible answer. */
+export function isReasoningModel(model: string): boolean {
+  return /(^|\/)gpt-oss-/i.test(model);
+}
+
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -175,26 +182,43 @@ export async function executeChatCompletion(
     ...conversation.map(m => ({ role: m.role, content: m.content }))
   ];
 
-  try {
-    let content = '';
+  // Reasoning models (e.g. openai/gpt-oss-*) spend output tokens on hidden reasoning before
+  // the answer. Keep reasoning light and leave a generous output budget so the visible answer
+  // is not starved, which otherwise surfaces as an empty completion.
+  const reasoningParams = isReasoningModel(model)
+    ? { reasoning_effort: 'low' as const, max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
+    : {};
+
+  const requestOnce = async (): Promise<string> => {
+    let text = '';
     if (onToken) {
       const stream = await client.chat.completions.create(
-        { model, temperature, messages, stream: true },
+        { model, temperature, messages, stream: true, ...reasoningParams },
         { signal: abortSignal }
       );
       for await (const part of stream) {
         const delta = part.choices[0]?.delta?.content || '';
         if (delta) {
-          content += delta;
+          text += delta;
           onToken(delta);
         }
       }
     } else {
       const response = await client.chat.completions.create(
-        { model, temperature, messages },
+        { model, temperature, messages, ...reasoningParams },
         { signal: abortSignal }
       );
-      content = response.choices[0]?.message?.content || '';
+      text = response.choices[0]?.message?.content || '';
+    }
+    return text;
+  };
+
+  try {
+    let content = await requestOnce();
+    // An empty answer emitted nothing to the stream, so one retry is safe and invisible to the user.
+    if (!content.trim() && !abortSignal?.aborted) {
+      console.warn(`[ShivQuill LLM] Empty completion from '${model}', retrying once...`);
+      content = await requestOnce();
     }
 
     // Strip quotation wraps if mistakenly returned
