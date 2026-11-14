@@ -1,0 +1,2247 @@
+[
+  {
+    "id": "acad-1",
+    "category": "academic",
+    "text": "Empirical observations in cohort 1 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 100). A two-tailed t-test revealed p < 0.01, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 1",
+      "Smith et al., 2020",
+      "p < 0.01"
+    ]
+  },
+  {
+    "id": "acad-2",
+    "category": "academic",
+    "text": "Empirical observations in cohort 2 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 101). A two-tailed t-test revealed p < 0.02, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 2",
+      "Smith et al., 2021",
+      "p < 0.02"
+    ]
+  },
+  {
+    "id": "acad-3",
+    "category": "academic",
+    "text": "Empirical observations in cohort 3 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 102). A two-tailed t-test revealed p < 0.03, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 3",
+      "Smith et al., 2022",
+      "p < 0.03"
+    ]
+  },
+  {
+    "id": "acad-4",
+    "category": "academic",
+    "text": "Empirical observations in cohort 4 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 103). A two-tailed t-test revealed p < 0.04, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 4",
+      "Smith et al., 2023",
+      "p < 0.04"
+    ]
+  },
+  {
+    "id": "acad-5",
+    "category": "academic",
+    "text": "Empirical observations in cohort 5 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 104). A two-tailed t-test revealed p < 0.05, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 5",
+      "Smith et al., 2020",
+      "p < 0.05"
+    ]
+  },
+  {
+    "id": "acad-6",
+    "category": "academic",
+    "text": "Empirical observations in cohort 6 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 105). A two-tailed t-test revealed p < 0.01, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 6",
+      "Smith et al., 2021",
+      "p < 0.01"
+    ]
+  },
+  {
+    "id": "acad-7",
+    "category": "academic",
+    "text": "Empirical observations in cohort 7 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 106). A two-tailed t-test revealed p < 0.02, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 7",
+      "Smith et al., 2022",
+      "p < 0.02"
+    ]
+  },
+  {
+    "id": "acad-8",
+    "category": "academic",
+    "text": "Empirical observations in cohort 8 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 107). A two-tailed t-test revealed p < 0.03, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 8",
+      "Smith et al., 2023",
+      "p < 0.03"
+    ]
+  },
+  {
+    "id": "acad-9",
+    "category": "academic",
+    "text": "Empirical observations in cohort 9 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 108). A two-tailed t-test revealed p < 0.04, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 9",
+      "Smith et al., 2020",
+      "p < 0.04"
+    ]
+  },
+  {
+    "id": "acad-10",
+    "category": "academic",
+    "text": "Empirical observations in cohort 10 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 109). A two-tailed t-test revealed p < 0.05, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 10",
+      "Smith et al., 2021",
+      "p < 0.05"
+    ]
+  },
+  {
+    "id": "acad-11",
+    "category": "academic",
+    "text": "Empirical observations in cohort 11 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 110). A two-tailed t-test revealed p < 0.01, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 11",
+      "Smith et al., 2022",
+      "p < 0.01"
+    ]
+  },
+  {
+    "id": "acad-12",
+    "category": "academic",
+    "text": "Empirical observations in cohort 12 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 111). A two-tailed t-test revealed p < 0.02, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 12",
+      "Smith et al., 2023",
+      "p < 0.02"
+    ]
+  },
+  {
+    "id": "acad-13",
+    "category": "academic",
+    "text": "Empirical observations in cohort 13 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 112). A two-tailed t-test revealed p < 0.03, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 13",
+      "Smith et al., 2020",
+      "p < 0.03"
+    ]
+  },
+  {
+    "id": "acad-14",
+    "category": "academic",
+    "text": "Empirical observations in cohort 14 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 113). A two-tailed t-test revealed p < 0.04, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 14",
+      "Smith et al., 2021",
+      "p < 0.04"
+    ]
+  },
+  {
+    "id": "acad-15",
+    "category": "academic",
+    "text": "Empirical observations in cohort 15 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 114). A two-tailed t-test revealed p < 0.05, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 15",
+      "Smith et al., 2022",
+      "p < 0.05"
+    ]
+  },
+  {
+    "id": "acad-16",
+    "category": "academic",
+    "text": "Empirical observations in cohort 16 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 115). A two-tailed t-test revealed p < 0.01, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 16",
+      "Smith et al., 2023",
+      "p < 0.01"
+    ]
+  },
+  {
+    "id": "acad-17",
+    "category": "academic",
+    "text": "Empirical observations in cohort 17 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 116). A two-tailed t-test revealed p < 0.02, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 17",
+      "Smith et al., 2020",
+      "p < 0.02"
+    ]
+  },
+  {
+    "id": "acad-18",
+    "category": "academic",
+    "text": "Empirical observations in cohort 18 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 117). A two-tailed t-test revealed p < 0.03, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 18",
+      "Smith et al., 2021",
+      "p < 0.03"
+    ]
+  },
+  {
+    "id": "acad-19",
+    "category": "academic",
+    "text": "Empirical observations in cohort 19 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 118). A two-tailed t-test revealed p < 0.04, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 19",
+      "Smith et al., 2022",
+      "p < 0.04"
+    ]
+  },
+  {
+    "id": "acad-20",
+    "category": "academic",
+    "text": "Empirical observations in cohort 20 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 119). A two-tailed t-test revealed p < 0.05, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 20",
+      "Smith et al., 2023",
+      "p < 0.05"
+    ]
+  },
+  {
+    "id": "acad-21",
+    "category": "academic",
+    "text": "Empirical observations in cohort 21 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 120). A two-tailed t-test revealed p < 0.01, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 21",
+      "Smith et al., 2020",
+      "p < 0.01"
+    ]
+  },
+  {
+    "id": "acad-22",
+    "category": "academic",
+    "text": "Empirical observations in cohort 22 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 121). A two-tailed t-test revealed p < 0.02, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 22",
+      "Smith et al., 2021",
+      "p < 0.02"
+    ]
+  },
+  {
+    "id": "acad-23",
+    "category": "academic",
+    "text": "Empirical observations in cohort 23 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 122). A two-tailed t-test revealed p < 0.03, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 23",
+      "Smith et al., 2022",
+      "p < 0.03"
+    ]
+  },
+  {
+    "id": "acad-24",
+    "category": "academic",
+    "text": "Empirical observations in cohort 24 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 123). A two-tailed t-test revealed p < 0.04, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 24",
+      "Smith et al., 2023",
+      "p < 0.04"
+    ]
+  },
+  {
+    "id": "acad-25",
+    "category": "academic",
+    "text": "Empirical observations in cohort 25 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 124). A two-tailed t-test revealed p < 0.05, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 25",
+      "Smith et al., 2020",
+      "p < 0.05"
+    ]
+  },
+  {
+    "id": "acad-26",
+    "category": "academic",
+    "text": "Empirical observations in cohort 26 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 125). A two-tailed t-test revealed p < 0.01, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 26",
+      "Smith et al., 2021",
+      "p < 0.01"
+    ]
+  },
+  {
+    "id": "acad-27",
+    "category": "academic",
+    "text": "Empirical observations in cohort 27 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2022, p. 126). A two-tailed t-test revealed p < 0.02, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 27",
+      "Smith et al., 2022",
+      "p < 0.02"
+    ]
+  },
+  {
+    "id": "acad-28",
+    "category": "academic",
+    "text": "Empirical observations in cohort 28 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2023, p. 127). A two-tailed t-test revealed p < 0.03, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 28",
+      "Smith et al., 2023",
+      "p < 0.03"
+    ]
+  },
+  {
+    "id": "acad-29",
+    "category": "academic",
+    "text": "Empirical observations in cohort 29 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2020, p. 128). A two-tailed t-test revealed p < 0.04, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 29",
+      "Smith et al., 2020",
+      "p < 0.04"
+    ]
+  },
+  {
+    "id": "acad-30",
+    "category": "academic",
+    "text": "Empirical observations in cohort 30 demonstrate that metabolic variances correlate significantly with cellular respiration metrics (Smith et al., 2021, p. 129). A two-tailed t-test revealed p < 0.05, establishing quantitative significance across the sample population.",
+    "preserves": [
+      "cohort 30",
+      "Smith et al., 2021",
+      "p < 0.05"
+    ]
+  },
+  {
+    "id": "cas-1",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-2",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-3",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-4",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-5",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-6",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-7",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-8",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-9",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-10",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-11",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-12",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-13",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-14",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-15",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-16",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-17",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-18",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-19",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-20",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-21",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-22",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-23",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-24",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "cas-25",
+    "category": "casual",
+    "text": "Hey guys, just wanted to check in about the party on Saturday at 7:30 PM. Let me know if you can bring snacks or drinks, otherwise I'll grab some from Costco near 5th Avenue.",
+    "preserves": [
+      "Saturday",
+      "7:30 PM",
+      "Costco",
+      "5th Avenue"
+    ]
+  },
+  {
+    "id": "email-1",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1000. We have finalized the quarterly budget at $50000 and would appreciate your approval before Friday, November 15, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1000",
+      "$50000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-2",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1001. We have finalized the quarterly budget at $50500 and would appreciate your approval before Friday, November 16, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1001",
+      "$50500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-3",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1002. We have finalized the quarterly budget at $51000 and would appreciate your approval before Friday, November 17, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1002",
+      "$51000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-4",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1003. We have finalized the quarterly budget at $51500 and would appreciate your approval before Friday, November 18, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1003",
+      "$51500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-5",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1004. We have finalized the quarterly budget at $52000 and would appreciate your approval before Friday, November 19, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1004",
+      "$52000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-6",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1005. We have finalized the quarterly budget at $52500 and would appreciate your approval before Friday, November 20, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1005",
+      "$52500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-7",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1006. We have finalized the quarterly budget at $53000 and would appreciate your approval before Friday, November 21, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1006",
+      "$53000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-8",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1007. We have finalized the quarterly budget at $53500 and would appreciate your approval before Friday, November 22, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1007",
+      "$53500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-9",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1008. We have finalized the quarterly budget at $54000 and would appreciate your approval before Friday, November 23, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1008",
+      "$54000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-10",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1009. We have finalized the quarterly budget at $54500 and would appreciate your approval before Friday, November 24, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1009",
+      "$54500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-11",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1010. We have finalized the quarterly budget at $55000 and would appreciate your approval before Friday, November 15, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1010",
+      "$55000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-12",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1011. We have finalized the quarterly budget at $55500 and would appreciate your approval before Friday, November 16, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1011",
+      "$55500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-13",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1012. We have finalized the quarterly budget at $56000 and would appreciate your approval before Friday, November 17, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1012",
+      "$56000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-14",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1013. We have finalized the quarterly budget at $56500 and would appreciate your approval before Friday, November 18, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1013",
+      "$56500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-15",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1014. We have finalized the quarterly budget at $57000 and would appreciate your approval before Friday, November 19, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1014",
+      "$57000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-16",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1015. We have finalized the quarterly budget at $57500 and would appreciate your approval before Friday, November 20, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1015",
+      "$57500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-17",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1016. We have finalized the quarterly budget at $58000 and would appreciate your approval before Friday, November 21, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1016",
+      "$58000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-18",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1017. We have finalized the quarterly budget at $58500 and would appreciate your approval before Friday, November 22, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1017",
+      "$58500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-19",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1018. We have finalized the quarterly budget at $59000 and would appreciate your approval before Friday, November 23, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1018",
+      "$59000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-20",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1019. We have finalized the quarterly budget at $59500 and would appreciate your approval before Friday, November 24, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1019",
+      "$59500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-21",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1020. We have finalized the quarterly budget at $60000 and would appreciate your approval before Friday, November 15, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1020",
+      "$60000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-22",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1021. We have finalized the quarterly budget at $60500 and would appreciate your approval before Friday, November 16, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1021",
+      "$60500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-23",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1022. We have finalized the quarterly budget at $61000 and would appreciate your approval before Friday, November 17, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1022",
+      "$61000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-24",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1023. We have finalized the quarterly budget at $61500 and would appreciate your approval before Friday, November 18, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1023",
+      "$61500",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "email-25",
+    "category": "email",
+    "text": "Dear Dr. Martinez, I am writing to follow up on project proposal #1024. We have finalized the quarterly budget at $62000 and would appreciate your approval before Friday, November 19, 2026. Sincerely, Alex Johnson.",
+    "preserves": [
+      "Dr. Martinez",
+      "#1024",
+      "$62000",
+      "2026",
+      "Alex Johnson"
+    ]
+  },
+  {
+    "id": "tech-1",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 4 replica nodes. When throughput exceeds 1000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "4 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-2",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.31 with 5 replica nodes. When throughput exceeds 2000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.31",
+      "5 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-3",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.32 with 6 replica nodes. When throughput exceeds 3000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.32",
+      "6 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-4",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.33 with 7 replica nodes. When throughput exceeds 4000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.33",
+      "7 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-5",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 8 replica nodes. When throughput exceeds 5000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "8 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-6",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.31 with 9 replica nodes. When throughput exceeds 6000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.31",
+      "9 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-7",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.32 with 10 replica nodes. When throughput exceeds 7000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.32",
+      "10 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-8",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.33 with 11 replica nodes. When throughput exceeds 8000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.33",
+      "11 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-9",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 4 replica nodes. When throughput exceeds 9000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "4 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-10",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.31 with 5 replica nodes. When throughput exceeds 10000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.31",
+      "5 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-11",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.32 with 6 replica nodes. When throughput exceeds 11000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.32",
+      "6 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-12",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.33 with 7 replica nodes. When throughput exceeds 12000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.33",
+      "7 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-13",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 8 replica nodes. When throughput exceeds 13000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "8 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-14",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.31 with 9 replica nodes. When throughput exceeds 14000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.31",
+      "9 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-15",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.32 with 10 replica nodes. When throughput exceeds 15000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.32",
+      "10 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-16",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.33 with 11 replica nodes. When throughput exceeds 16000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.33",
+      "11 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-17",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 4 replica nodes. When throughput exceeds 17000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "4 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-18",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.31 with 5 replica nodes. When throughput exceeds 18000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.31",
+      "5 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-19",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.32 with 6 replica nodes. When throughput exceeds 19000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.32",
+      "6 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-20",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.33 with 7 replica nodes. When throughput exceeds 20000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.33",
+      "7 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-21",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 8 replica nodes. When throughput exceeds 21000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "8 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-22",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.31 with 9 replica nodes. When throughput exceeds 22000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.31",
+      "9 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-23",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.32 with 10 replica nodes. When throughput exceeds 23000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.32",
+      "10 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "tech-24",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.33 with 11 replica nodes. When throughput exceeds 24000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-2.",
+    "preserves": [
+      "Kubernetes v1.33",
+      "11 replica nodes",
+      "Prometheus",
+      "us-east-2"
+    ]
+  },
+  {
+    "id": "tech-25",
+    "category": "technical",
+    "text": "The distributed cluster runs Kubernetes v1.30 with 4 replica nodes. When throughput exceeds 25000 req/sec, Prometheus alerts trigger the Horizontal Pod Autoscaler to spin up additional microservice instances in us-east-1.",
+    "preserves": [
+      "Kubernetes v1.30",
+      "4 replica nodes",
+      "Prometheus",
+      "us-east-1"
+    ]
+  },
+  {
+    "id": "res-1",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100000 on chromosome 1 exhibited a cleavage efficiency of 80%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100000",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-2",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100001 on chromosome 2 exhibited a cleavage efficiency of 81%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100001",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-3",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100002 on chromosome 3 exhibited a cleavage efficiency of 82%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100002",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-4",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100003 on chromosome 4 exhibited a cleavage efficiency of 83%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100003",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-5",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100004 on chromosome 5 exhibited a cleavage efficiency of 84%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100004",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-6",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100005 on chromosome 6 exhibited a cleavage efficiency of 85%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100005",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-7",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100006 on chromosome 7 exhibited a cleavage efficiency of 86%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100006",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-8",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100007 on chromosome 8 exhibited a cleavage efficiency of 87%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100007",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-9",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100008 on chromosome 9 exhibited a cleavage efficiency of 88%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100008",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-10",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100009 on chromosome 10 exhibited a cleavage efficiency of 89%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100009",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-11",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100010 on chromosome 11 exhibited a cleavage efficiency of 90%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100010",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-12",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100011 on chromosome 12 exhibited a cleavage efficiency of 91%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100011",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-13",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100012 on chromosome 13 exhibited a cleavage efficiency of 92%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100012",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-14",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100013 on chromosome 14 exhibited a cleavage efficiency of 93%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100013",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-15",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100014 on chromosome 15 exhibited a cleavage efficiency of 94%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100014",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-16",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100015 on chromosome 16 exhibited a cleavage efficiency of 80%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100015",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-17",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100016 on chromosome 17 exhibited a cleavage efficiency of 81%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100016",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-18",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100017 on chromosome 18 exhibited a cleavage efficiency of 82%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100017",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-19",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100018 on chromosome 19 exhibited a cleavage efficiency of 83%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100018",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "res-20",
+    "category": "research",
+    "text": "CRISPR-Cas9 endonuclease complexes targeting locus rs100019 on chromosome 20 exhibited a cleavage efficiency of 84%. As documented by Zhang & Patel (2024), off-target mutagenesis remained beneath 0.02% at 37.0°C.",
+    "preserves": [
+      "CRISPR-Cas9",
+      "rs100019",
+      "Zhang & Patel (2024)",
+      "37.0°C"
+    ]
+  },
+  {
+    "id": "gram-1",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #1.",
+    "preserves": [
+      "machine #1"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-2",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #2.",
+    "preserves": [
+      "machine #2"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-3",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #3.",
+    "preserves": [
+      "machine #3"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-4",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #4.",
+    "preserves": [
+      "machine #4"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-5",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #5.",
+    "preserves": [
+      "machine #5"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-6",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #6.",
+    "preserves": [
+      "machine #6"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-7",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #7.",
+    "preserves": [
+      "machine #7"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-8",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #8.",
+    "preserves": [
+      "machine #8"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-9",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #9.",
+    "preserves": [
+      "machine #9"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-10",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #10.",
+    "preserves": [
+      "machine #10"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-11",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #11.",
+    "preserves": [
+      "machine #11"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-12",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #12.",
+    "preserves": [
+      "machine #12"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-13",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #13.",
+    "preserves": [
+      "machine #13"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-14",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #14.",
+    "preserves": [
+      "machine #14"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-15",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #15.",
+    "preserves": [
+      "machine #15"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-16",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #16.",
+    "preserves": [
+      "machine #16"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-17",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #17.",
+    "preserves": [
+      "machine #17"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-18",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #18.",
+    "preserves": [
+      "machine #18"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-19",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #19.",
+    "preserves": [
+      "machine #19"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-20",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #20.",
+    "preserves": [
+      "machine #20"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-21",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #21.",
+    "preserves": [
+      "machine #21"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-22",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #22.",
+    "preserves": [
+      "machine #22"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-23",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #23.",
+    "preserves": [
+      "machine #23"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-24",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #24.",
+    "preserves": [
+      "machine #24"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "gram-25",
+    "category": "grammar_errors",
+    "text": "Teh results of the experiment was completely unexpected because nobody have checked teh calibration settings on machine #25.",
+    "preserves": [
+      "machine #25"
+    ],
+    "expectedErrors": [
+      "teh",
+      "was",
+      "have"
+    ]
+  },
+  {
+    "id": "long-1",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 1. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $10.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 1",
+      "$10.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-2",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 2. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $11.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 2",
+      "$11.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-3",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 3. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $12.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 3",
+      "$12.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-4",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 4. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $13.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 4",
+      "$13.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-5",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 5. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $14.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 5",
+      "$14.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-6",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 6. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $15.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 6",
+      "$15.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-7",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 7. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $16.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 7",
+      "$16.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-8",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 8. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $17.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 8",
+      "$17.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-9",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 9. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $18.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 9",
+      "$18.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-10",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 10. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $19.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 10",
+      "$19.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-11",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 11. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $20.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 11",
+      "$20.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-12",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 12. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $21.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 12",
+      "$21.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-13",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 13. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $22.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 13",
+      "$22.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-14",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 14. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $23.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 14",
+      "$23.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "long-15",
+    "category": "long_paragraphs",
+    "text": "The transition toward sustainable energy infrastructure represents a monumental challenge for municipal administrations in region 15. Initial capital expenditures for photovoltaic arrays and grid-scale lithium-ion battery storage systems frequently exceed $24.5 million. Nevertheless, long-term operational savings coupled with regulatory carbon credit incentives yield a projected return on investment within 7.5 years. Public-private partnerships formed in early 2025 have demonstrated that municipal solar integration decreases grid vulnerability during extreme weather events, while simultaneously driving localized economic development through skilled electrical engineering employment opportunities across all contiguous counties.",
+    "preserves": [
+      "region 15",
+      "$24.5 million",
+      "7.5 years",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-1",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q1 2026. Automated market makers facilitated over $100M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q1 2026",
+      "$100M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-2",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q2 2026. Automated market makers facilitated over $110M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q2 2026",
+      "$110M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-3",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q3 2026. Automated market makers facilitated over $120M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q3 2026",
+      "$120M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-4",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q4 2026. Automated market makers facilitated over $130M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q4 2026",
+      "$130M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-5",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q1 2026. Automated market makers facilitated over $140M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q1 2026",
+      "$140M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-6",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q2 2026. Automated market makers facilitated over $150M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q2 2026",
+      "$150M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-7",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q3 2026. Automated market makers facilitated over $160M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q3 2026",
+      "$160M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-8",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q4 2026. Automated market makers facilitated over $170M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q4 2026",
+      "$170M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-9",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q1 2026. Automated market makers facilitated over $180M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q1 2026",
+      "$180M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-10",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q2 2026. Automated market makers facilitated over $190M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q2 2026",
+      "$190M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-11",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q3 2026. Automated market makers facilitated over $200M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q3 2026",
+      "$200M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-12",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q4 2026. Automated market makers facilitated over $210M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q4 2026",
+      "$210M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-13",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q1 2026. Automated market makers facilitated over $220M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q1 2026",
+      "$220M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-14",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q2 2026. Automated market makers facilitated over $230M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q2 2026",
+      "$230M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "multi-15",
+    "category": "multi_paragraph",
+    "text": "Decentralized finance protocols experienced rapid liquidity influx throughout Q3 2026. Automated market makers facilitated over $240M in daily settlement volume across Layer-2 rollups.\n\nHowever, smart contract auditing standards must be tightened. Vulnerabilities in reentrancy guards and oracle price feeds accounted for the majority of security incidents recorded by PeckShield in their annual 2025 retrospective.",
+    "preserves": [
+      "Q3 2026",
+      "$240M",
+      "PeckShield",
+      "2025"
+    ]
+  },
+  {
+    "id": "cite-1",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 10, 2026, global cardiovascular mortality decreased by 3% following dietary sodium reductions (WHO Technical Report Series, No. 900). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 10, 2026",
+      "3%",
+      "No. 900",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-2",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 11, 2026, global cardiovascular mortality decreased by 4% following dietary sodium reductions (WHO Technical Report Series, No. 901). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 11, 2026",
+      "4%",
+      "No. 901",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-3",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 12, 2026, global cardiovascular mortality decreased by 5% following dietary sodium reductions (WHO Technical Report Series, No. 902). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 12, 2026",
+      "5%",
+      "No. 902",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-4",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 13, 2026, global cardiovascular mortality decreased by 6% following dietary sodium reductions (WHO Technical Report Series, No. 903). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 13, 2026",
+      "6%",
+      "No. 903",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-5",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 14, 2026, global cardiovascular mortality decreased by 7% following dietary sodium reductions (WHO Technical Report Series, No. 904). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 14, 2026",
+      "7%",
+      "No. 904",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-6",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 15, 2026, global cardiovascular mortality decreased by 3% following dietary sodium reductions (WHO Technical Report Series, No. 905). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 15, 2026",
+      "3%",
+      "No. 905",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-7",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 16, 2026, global cardiovascular mortality decreased by 4% following dietary sodium reductions (WHO Technical Report Series, No. 906). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 16, 2026",
+      "4%",
+      "No. 906",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-8",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 17, 2026, global cardiovascular mortality decreased by 5% following dietary sodium reductions (WHO Technical Report Series, No. 907). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 17, 2026",
+      "5%",
+      "No. 907",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-9",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 18, 2026, global cardiovascular mortality decreased by 6% following dietary sodium reductions (WHO Technical Report Series, No. 908). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 18, 2026",
+      "6%",
+      "No. 908",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-10",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 19, 2026, global cardiovascular mortality decreased by 7% following dietary sodium reductions (WHO Technical Report Series, No. 909). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 19, 2026",
+      "7%",
+      "No. 909",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-11",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 20, 2026, global cardiovascular mortality decreased by 3% following dietary sodium reductions (WHO Technical Report Series, No. 910). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 20, 2026",
+      "3%",
+      "No. 910",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-12",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 21, 2026, global cardiovascular mortality decreased by 4% following dietary sodium reductions (WHO Technical Report Series, No. 911). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 21, 2026",
+      "4%",
+      "No. 911",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-13",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 22, 2026, global cardiovascular mortality decreased by 5% following dietary sodium reductions (WHO Technical Report Series, No. 912). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 22, 2026",
+      "5%",
+      "No. 912",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-14",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 23, 2026, global cardiovascular mortality decreased by 6% following dietary sodium reductions (WHO Technical Report Series, No. 913). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 23, 2026",
+      "6%",
+      "No. 913",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-15",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 24, 2026, global cardiovascular mortality decreased by 7% following dietary sodium reductions (WHO Technical Report Series, No. 914). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 24, 2026",
+      "7%",
+      "No. 914",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-16",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 10, 2026, global cardiovascular mortality decreased by 3% following dietary sodium reductions (WHO Technical Report Series, No. 915). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 10, 2026",
+      "3%",
+      "No. 915",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-17",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 11, 2026, global cardiovascular mortality decreased by 4% following dietary sodium reductions (WHO Technical Report Series, No. 916). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 11, 2026",
+      "4%",
+      "No. 916",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-18",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 12, 2026, global cardiovascular mortality decreased by 5% following dietary sodium reductions (WHO Technical Report Series, No. 917). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 12, 2026",
+      "5%",
+      "No. 917",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-19",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 13, 2026, global cardiovascular mortality decreased by 6% following dietary sodium reductions (WHO Technical Report Series, No. 918). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 13, 2026",
+      "6%",
+      "No. 918",
+      "Henderson (2023)"
+    ]
+  },
+  {
+    "id": "cite-20",
+    "category": "citations_and_dates",
+    "text": "According to the World Health Organization report published on March 14, 2026, global cardiovascular mortality decreased by 7% following dietary sodium reductions (WHO Technical Report Series, No. 919). These findings substantiate earlier hypotheses proposed by Henderson (2023).",
+    "preserves": [
+      "March 14, 2026",
+      "7%",
+      "No. 919",
+      "Henderson (2023)"
+    ]
+  }
+]
