@@ -183,7 +183,8 @@ originalityRouter.get('/corpus', (req: Request, res: Response) => {
   res.json({
     documentCount: defaultCorpusManager.getDocumentCount(),
     totalShingles: defaultCorpusManager.getTotalShinglesCount(),
-    documents: defaultCorpusManager.getAllDocuments()
+    // Metadata only: full texts would make this response large for no benefit
+    documents: defaultCorpusManager.getAllDocuments().map(({ id, title, authorOrSource, url }) => ({ id, title, authorOrSource, url }))
   });
 });
 
@@ -253,6 +254,7 @@ const citationSchema = z.object({
   style: z.enum(['APA', 'MLA', 'Chicago', 'Harvard']).default('APA'),
   url: z.string().optional(),
   doi: z.string().optional(),
+  isbn: z.string().max(40).optional(),
   title: z.string().optional(),
   authors: z.array(z.string()).optional(),
   year: z.string().optional(),
@@ -293,6 +295,38 @@ async function fetchCrossrefMetadata(doiQuery: string): Promise<any | null> {
   }
 }
 
+/** Normalizes and checksum-validates an ISBN-10 or ISBN-13. Returns null when invalid. */
+export function normalizeIsbn(raw: string): string | null {
+  const isbn = raw.replace(/[\s-]/g, '').toUpperCase();
+  if (/^\d{9}[\dX]$/.test(isbn)) {
+    const sum = isbn.split('').reduce((acc, ch, i) => acc + (ch === 'X' ? 10 : Number(ch)) * (10 - i), 0);
+    return sum % 11 === 0 ? isbn : null;
+  }
+  if (/^\d{13}$/.test(isbn)) {
+    const sum = isbn.split('').reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 1 : 3), 0);
+    return sum % 10 === 0 ? isbn : null;
+  }
+  return null;
+}
+
+/** Looks up book metadata by ISBN using the free OpenLibrary Books API. */
+async function fetchOpenLibraryBook(isbn: string): Promise<any | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(
+      `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`,
+      { headers: { 'User-Agent': 'ShivQuill-Citation-Engine/2.2' }, signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    return data[`ISBN:${isbn}`] || null;
+  } catch {
+    return null;
+  }
+}
+
 originalityRouter.post('/citation', async (req: Request, res: Response) => {
   try {
     const data = citationSchema.parse(req.body);
@@ -312,7 +346,7 @@ originalityRouter.post('/citation', async (req: Request, res: Response) => {
     };
 
     let isVerified = false;
-    let sourceOrigin: 'crossref_doi' | 'user_supplied' = 'user_supplied';
+    let sourceOrigin: 'crossref_doi' | 'openlibrary_isbn' | 'user_supplied' = 'user_supplied';
     let retrievedMetadata: CitationResponse['retrievedMetadata'];
 
     const targetDoi = data.doi || (data.url?.includes('doi.org/') ? data.url : undefined);
@@ -344,6 +378,28 @@ originalityRouter.post('/citation', async (req: Request, res: Response) => {
           publishedDate: source.year,
           publisher: meta.publisher
         };
+      }
+    }
+
+    if (!isVerified && data.isbn) {
+      const isbn = normalizeIsbn(data.isbn);
+      if (!isbn) {
+        return res.status(400).json({ error: 'That ISBN is not valid. Check the digits (10 or 13).' });
+      }
+      const book = await fetchOpenLibraryBook(isbn);
+      if (book) {
+        isVerified = true;
+        sourceOrigin = 'openlibrary_isbn';
+        source.sourceType = 'book';
+        source.title = [book.title, book.subtitle].filter(Boolean).join(': ') || source.title;
+        if (Array.isArray(book.authors) && book.authors.length) {
+          source.authors = book.authors.map((a: any) => parseAuthorName(String(a.name || ''))).filter(Boolean);
+        }
+        const year = String(book.publish_date || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/);
+        if (year) source.year = year[1];
+        if (book.publishers?.[0]?.name) source.publisher = book.publishers[0].name;
+        if (book.url) source.url = book.url;
+        retrievedMetadata = { publisher: source.publisher, publishedDate: source.year };
       }
     }
 

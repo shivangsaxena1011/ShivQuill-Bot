@@ -19,7 +19,29 @@ export interface ParaphraseResult {
   wordCountOriginal: number;
   wordCountAltered: number;
   partialRecovery?: boolean;
+  frozenWordsMissing?: string[];
   semanticConsistency?: { preservationRate: number; totalCount: number; preservedCount: number; notes: string };
+}
+
+export interface ToneAnalysis {
+  primaryTone: string;
+  tones: { name: string; score: number }[];
+  formality: number;
+  sentiment: 'positive' | 'neutral' | 'negative' | 'mixed';
+  confidence: number;
+  summary: string;
+  sampled: boolean;
+}
+
+export interface ToneRewriteResult {
+  rewrittenText: string;
+  diffSpans: DiffSpan[];
+  tone: string;
+}
+
+export interface GlossaryEntry {
+  source: string;
+  target: string;
 }
 
 export interface JobProgress {
@@ -30,6 +52,7 @@ export interface JobProgress {
   failedChunks: number;
   progressPercent: number;
   errorMessage?: string;
+  latestText?: string;
   result?: ParaphraseResult;
 }
 
@@ -119,13 +142,14 @@ export interface CitationParams {
   pages?: string;
   url?: string;
   doi?: string;
+  isbn?: string;
 }
 
 export interface CitationResult {
   inTextCitation: string;
   fullBibliographyEntry: string;
   isVerified: boolean;
-  sourceOrigin: 'crossref_doi' | 'user_supplied';
+  sourceOrigin: 'crossref_doi' | 'openlibrary_isbn' | 'user_supplied';
   resolved: {
     sourceType: CitationParams['sourceType'];
     title: string;
@@ -158,11 +182,75 @@ export interface Health {
 
 type Opts = { signal?: AbortSignal };
 
+export interface StreamHandlers {
+  signal?: AbortSignal;
+  onDelta?: (text: string) => void;
+  onStatus?: (message: string) => void;
+}
+
+/**
+ * POSTs with `?stream=1` and reads Server-Sent Events: `delta` pieces arrive as they're
+ * generated, `done` carries the final result. Falls back to plain JSON if the server
+ * (or a proxy) didn't stream.
+ */
+export async function streamPost<T>(path: string, body: unknown, h: StreamHandlers = {}): Promise<T> {
+  const res = await fetch(`/api${path}?stream=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify(body),
+    signal: h.signal
+  });
+
+  const type = res.headers.get('content-type') || '';
+  if (!type.includes('text/event-stream')) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpError(res.status, data?.error || data?.message || `Request failed (${res.status}).`);
+    return data as T;
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: T | undefined;
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let event = 'message';
+      let data = '';
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trim();
+      }
+      if (!data) continue; // heartbeat comment
+      const payload = JSON.parse(data);
+      if (event === 'delta') h.onDelta?.(payload.text);
+      else if (event === 'status') h.onStatus?.(payload.message);
+      else if (event === 'error') throw new HttpError(payload.status || 500, payload.error || 'Request failed.');
+      else if (event === 'done') result = payload as T;
+    }
+  }
+  if (result === undefined) throw new Error('The connection closed before the result arrived. Please try again.');
+  return result;
+}
+
+export class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
 export const api = {
   health: (o: Opts = {}) => http.get<Health>('/health', { signal: o.signal, timeout: 15000 }).then(r => r.data),
   languages: () => http.get<{ languages: { code: string; name: string }[] }>('/translate/languages').then(r => r.data.languages),
 
-  startParaphrase: (body: { text: string; mode: ParaphraseMode; synonymStrength: number; customInstruction?: string }, o: Opts = {}) =>
+  startParaphrase: (body: { text: string; mode: ParaphraseMode; synonymStrength: number; customInstruction?: string; frozenWords?: string[] }, o: Opts = {}) =>
     http.post<{ jobId: string; totalChunks: number }>('/paraphrase', { ...body, async: true }, { signal: o.signal }).then(r => r.data),
   jobProgress: (id: string, o: Opts = {}) => http.get<JobProgress>(`/tasks/${id}`, { signal: o.signal }).then(r => r.data),
   cancelJob: (id: string) => http.post(`/tasks/${id}/cancel`).then(r => r.data),
@@ -170,17 +258,21 @@ export const api = {
   grammar: (text: string, o: Opts = {}) => http.post<GrammarResult>('/grammar', { text }, { signal: o.signal }).then(r => r.data),
   suggestions: (text: string, focus: string, o: Opts = {}) =>
     http.post<SuggestionsResult>('/suggestions', { text, focus }, { signal: o.signal }).then(r => r.data),
-  humanize: (text: string, readabilityLevel: string, o: Opts = {}) =>
-    http.post<HumanizeResult>('/humanize', { text, readabilityLevel }, { signal: o.signal }).then(r => r.data),
-  summarize: (text: string, format: 'paragraph' | 'bullet', length: 'short' | 'medium' | 'long', o: Opts = {}) =>
-    http.post<SummarizeResult>('/summarize', { text, format, length }, { signal: o.signal }).then(r => r.data),
-  translate: (text: string, sourceLang: string, targetLang: string, o: Opts = {}) =>
-    http.post<TranslateResult>('/translate', { text, sourceLang, targetLang }, { signal: o.signal }).then(r => r.data),
+  humanize: (text: string, readabilityLevel: string, h: StreamHandlers = {}) =>
+    streamPost<HumanizeResult>('/humanize', { text, readabilityLevel }, h),
+  summarize: (text: string, format: 'paragraph' | 'bullet', length: 'short' | 'medium' | 'long', h: StreamHandlers = {}) =>
+    streamPost<SummarizeResult>('/summarize', { text, format, length }, h),
+  translate: (text: string, sourceLang: string, targetLang: string, glossary: GlossaryEntry[], h: StreamHandlers = {}) =>
+    streamPost<TranslateResult>('/translate', { text, sourceLang, targetLang, glossary: glossary.length ? glossary : undefined }, h),
+  rephraseSentence: (body: { sentence: string; context?: string; mode: ParaphraseMode; count?: number; frozenWords?: string[] }, o: Opts = {}) =>
+    http.post<{ alternatives: string[] }>('/paraphrase/sentence', body, { signal: o.signal }).then(r => r.data),
+  toneAnalyze: (text: string, o: Opts = {}) => http.post<ToneAnalysis>('/tone/analyze', { text }, { signal: o.signal }).then(r => r.data),
+  toneRewrite: (text: string, tone: string, h: StreamHandlers = {}) => streamPost<ToneRewriteResult>('/tone/rewrite', { text, tone }, h),
   detector: (text: string, o: Opts = {}) => http.post<DetectorResult>('/originality/detector', { text }, { signal: o.signal }).then(r => r.data),
   plagiarism: (text: string, o: Opts = {}) => http.post<PlagiarismResult>('/originality/plagiarism', { text }, { signal: o.signal }).then(r => r.data),
   citation: (body: CitationParams, o: Opts = {}) => http.post<CitationResult>('/originality/citation', body, { signal: o.signal }).then(r => r.data),
-  chat: (messages: ChatTurn[], documentContext: string | undefined, o: Opts = {}) =>
-    http.post<{ content: string }>('/chat', { messages, documentContext }, { signal: o.signal }).then(r => r.data)
+  chat: (messages: ChatTurn[], documentContext: string | undefined, h: StreamHandlers = {}) =>
+    streamPost<{ content: string }>('/chat', { messages, documentContext }, h)
 };
 
 export function isCancel(err: unknown): boolean {
@@ -189,6 +281,14 @@ export function isCancel(err: unknown): boolean {
 
 /** Turns any request error into a short, human-readable message. */
 export function errorMessage(err: unknown): string {
+  if (err instanceof HttpError) {
+    if (err.status === 429) return err.message || 'Too many requests — please wait a minute and try again.';
+    if (err.status === 502 || err.status === 503) return 'The server is starting up or busy. Please try again in a moment.';
+    return err.message;
+  }
+  if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
+    return 'Cannot reach the server. Check your connection — if the app was idle, it may be waking up.';
+  }
   const ax = err as AxiosError<any>;
   if (ax?.response) {
     const data = ax.response.data;

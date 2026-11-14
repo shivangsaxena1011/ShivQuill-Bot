@@ -9,15 +9,47 @@ export type ToolId =
   | 'translate'
   | 'detector'
   | 'plagiarism'
-  | 'citation';
+  | 'citation'
+  | 'tone'
+  | 'readability'
+  | 'library';
 
 /** Small app-wide state (no Pinia needed). */
 export const workspace = reactive({
   activeTool: 'paraphrase' as ToolId,
   chatOpen: false,
   /** Current input text of each tool — used as chat context for the tool on screen */
-  texts: {} as Partial<Record<ToolId, string>>
+  texts: {} as Partial<Record<ToolId, string>>,
+  /** Text waiting to be loaded into a tool (from the Library or "Send to") */
+  pendingLoad: null as null | { tool: ToolId; text: string },
+  shortcutsOpen: false
 });
+
+/** Opens a tool and loads text into its input. */
+export function openInTool(tool: ToolId, text: string) {
+  workspace.pendingLoad = { tool, text };
+  workspace.activeTool = tool;
+}
+
+/**
+ * A tool's main input: remembered between visits, shared with the chat assistant, and able to
+ * receive text from the Library ("Open in…").
+ */
+export function useToolInput(tool: ToolId, sample: string): Ref<string> {
+  const input = persisted(tool, sample);
+  shareToolText(tool, input);
+  watch(
+    () => workspace.pendingLoad,
+    load => {
+      if (load && load.tool === tool) {
+        input.value = load.text;
+        workspace.pendingLoad = null;
+      }
+    },
+    { immediate: true }
+  );
+  return input;
+}
 
 /** Keeps the shared copy of a tool's input in sync (for the chat assistant). */
 export function shareToolText(tool: ToolId, source: Ref<string>) {
@@ -74,5 +106,21 @@ export function persisted(key: string, initial: string): Ref<string> {
       } catch { /* quota or private mode */ }
     }, 600);
   });
+  return r;
+}
+
+/** Like `persisted`, for small JSON values (lists, presets). */
+export function persistedJson<T>(key: string, initial: T): Ref<T> {
+  let start = initial;
+  try {
+    const saved = localStorage.getItem(`sq:${key}`);
+    if (saved !== null) start = JSON.parse(saved) as T;
+  } catch { /* storage unavailable or corrupt */ }
+  const r = ref(start) as Ref<T>;
+  watch(r, v => {
+    try {
+      localStorage.setItem(`sq:${key}`, JSON.stringify(v));
+    } catch { /* quota or private mode */ }
+  }, { deep: true });
   return r;
 }

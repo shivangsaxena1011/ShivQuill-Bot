@@ -13,7 +13,8 @@ CRITICAL PRESERVATION & INVARIANCE GUIDELINES:
 export function getParaphraseSystemPrompt(
   mode: ParaphraseMode,
   strength: SynonymStrength = 2,
-  previousContext?: string
+  previousContext?: string,
+  frozenWords: string[] = []
 ): string {
   const intensityDescriptions: Record<SynonymStrength, string> = {
     1: 'Conservative changes: alter only awkward phrasing or minor grammatical constructs. Keep the majority of original vocabulary intact.',
@@ -67,6 +68,12 @@ Your objective: ${modeInstructions[mode]}
 Synonym & Structure Intensity: Level ${strength}/4 (${intensityDescriptions[strength]}).
 
 ${INVARIANCE_RULES}`;
+
+  if (frozenWords.length > 0) {
+    prompt += `\nFROZEN TERMS (copy these exactly, same spelling and case; do not replace, reword or translate them):\n${frozenWords
+      .map(w => `- ${w.replace(/[\r\n]+/g, ' ')}`)
+      .join('\n')}\n`;
+  }
 
   if (previousContext && previousContext.trim().length > 0) {
     prompt += `\nPRECEDING PASSAGE CONTEXT (Ensure the rewrite transitions smoothly from this):
@@ -135,7 +142,17 @@ CRITICAL RULES:
 - Output ONLY the summary text.`;
 }
 
-export function getTranslateSystemPrompt(targetLangName: string, targetLangCode: string, sourceLangName?: string): string {
+export function getTranslateSystemPrompt(
+  targetLangName: string,
+  targetLangCode: string,
+  sourceLangName?: string,
+  glossary?: Array<{ source: string; target: string }>
+): string {
+  const glossaryBlock = glossary && glossary.length > 0
+    ? `\nGLOSSARY (always translate these terms exactly as given; never translate the target side):\n${glossary
+        .map(g => `- "${g.source.replace(/"/g, "'")}" => "${g.target.replace(/"/g, "'")}"`)
+        .join('\n')}\n`
+    : '';
   return `You are a professional, culturally fluent translator.
 Translate the input text${sourceLangName ? ` from ${sourceLangName}` : ''} faithfully and idiomatically into ${targetLangName} (ISO code: ${targetLangCode}).
 
@@ -143,7 +160,7 @@ TRANSLATION REQUIREMENTS:
 1. Maintain the original document's tone, formatting, paragraphing, and register.
 2. Preserve proper nouns, entity names, numbers, equations, citations, and dates.
 3. Do NOT provide translation commentary, notes, or pronunciation guides.
-4. Output ONLY the translated text.`;
+4. Output ONLY the translated text.${glossaryBlock}`;
 }
 
 export function getSuggestionsSystemPrompt(focus: string = 'all'): string {
@@ -176,3 +193,48 @@ CRITICAL RULES:
 - Output ONLY the raw JSON object. Do not include markdown wraps or conversational commentary.`;
 }
 
+
+export function getSentenceAlternativesPrompt(
+  mode: ParaphraseMode,
+  count: number,
+  context?: string,
+  frozenWords: string[] = []
+): string {
+  return `You are an expert editor generating SENTENCE ALTERNATIVES.
+Rewrite the user's sentence ${count} different ways in a "${mode}" style. Each alternative must keep the exact meaning,
+facts, numbers, names and citations, and read naturally in the surrounding text.
+${frozenWords.length ? `Keep these terms exactly as written: ${frozenWords.join(', ')}.\n` : ''}${context ? `Surrounding text (for tone and flow only, do not rewrite it):\n<context>\n${context.replace(/<\/?context>/gi, '')}\n</context>\n` : ''}
+Respond with ONLY a JSON object: {"alternatives": ["...", "..."]} — no markdown, no commentary.`;
+}
+
+export function getToneAnalysisPrompt(): string {
+  return `You are a TONE ANALYST for written text.
+Assess the overall tone of the user's text. Respond with ONLY a JSON object matching:
+{
+  "primaryTone": string,            // one or two words, e.g. "Formal", "Friendly", "Urgent"
+  "tones": [{ "name": string, "score": number }],  // 3-6 tones, score 0-100, highest first
+  "formality": number,              // 0 (very casual) to 100 (very formal)
+  "sentiment": "positive" | "neutral" | "negative" | "mixed",
+  "confidence": number,             // 0-100, how assertive/confident the writing sounds
+  "summary": string                 // one sentence describing how the text comes across
+}
+No markdown, no commentary.`;
+}
+
+export const TONE_TARGETS: Record<string, string> = {
+  formal: 'formal and professional: precise wording, no slang or contractions',
+  friendly: 'warm and friendly: approachable, conversational, positive',
+  confident: 'confident and assertive: direct statements, no hedging or filler',
+  persuasive: 'persuasive: compelling, benefit-focused, with a clear call to action where natural',
+  empathetic: 'empathetic and supportive: considerate, acknowledges feelings',
+  neutral: 'neutral and objective: balanced, factual, no emotional language',
+  casual: 'casual and relaxed: everyday language, short sentences',
+  diplomatic: 'diplomatic and tactful: softens criticism, constructive'
+};
+
+export function getToneRewritePrompt(target: string): string {
+  return `You are a skilled TONE REWRITER and prose stylist.
+Rewrite the user's text so its tone becomes ${TONE_TARGETS[target] || target}.
+Keep the meaning, facts, names, numbers, citations and paragraph structure. Do not add new claims.
+Return ONLY the rewritten text.`;
+}

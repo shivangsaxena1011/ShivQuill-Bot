@@ -4,6 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocumentProcessingJob, documentJobRegistry, JobCancelledError } from '../chunkOrchestrator.js';
 import { generateDiffSpansForPairs } from '../diff.js';
 import { config } from '../config.js';
+import { executeLlmCompletion } from '../llm.js';
+import { getSentenceAlternativesPrompt } from '../prompts.js';
+import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { ParaphraseResponse, ParaphraseMode, SynonymStrength, SemanticConsistencyReport } from '../types.js';
 
 export const paraphraseRouter = Router();
@@ -14,6 +17,7 @@ const paraphraseSchema = z.object({
   mode: z.enum(['standard', 'fluency', 'formal', 'academic', 'simple', 'creative', 'expand', 'shorten', 'custom']).default('standard'),
   synonymStrength: z.number().int().min(1).max(4).default(2),
   customInstruction: z.string().max(2000).optional(),
+  frozenWords: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
   model: z.string().optional(),
   async: z.boolean().optional()
 });
@@ -93,18 +97,19 @@ function evaluateSemanticConsistency(originalText: string, rewrittenText: string
 const countWords = (str: string) => str.trim().split(/\s+/).filter(Boolean).length;
 
 // Full responses for finished jobs are computed once (diffing a large document is expensive)
-const responseCache = new WeakMap<DocumentProcessingJob, ParaphraseResponse & { partialRecovery?: boolean }>();
+type FullParaphraseResponse = ParaphraseResponse & { partialRecovery?: boolean; frozenWordsMissing?: string[] };
+const responseCache = new WeakMap<DocumentProcessingJob, FullParaphraseResponse>();
 
 /**
  * Builds the full paraphrase response (diff spans, invariance report) for a completed job.
  * Shared by the synchronous route and by /api/tasks/:id for async jobs.
  */
-export function buildParaphraseResponse(job: DocumentProcessingJob): ParaphraseResponse & { partialRecovery?: boolean } {
+export function buildParaphraseResponse(job: DocumentProcessingJob): FullParaphraseResponse {
   const cached = responseCache.get(job);
   if (cached) return cached;
 
   const paraphrasedText = job.recombine();
-  const response: ParaphraseResponse & { partialRecovery?: boolean } = {
+  const response: FullParaphraseResponse = {
     originalText: job.originalText,
     paraphrasedText,
     mode: job.mode,
@@ -113,7 +118,12 @@ export function buildParaphraseResponse(job: DocumentProcessingJob): ParaphraseR
     wordCountOriginal: countWords(job.originalText),
     wordCountAltered: countWords(paraphrasedText),
     semanticConsistency: evaluateSemanticConsistency(job.originalText, paraphrasedText),
-    partialRecovery: job.partialRecovery
+    partialRecovery: job.partialRecovery,
+    // Frozen terms that were in the input but did not survive the rewrite (so the UI can warn)
+    frozenWordsMissing: job.frozenWords.filter(w => {
+      const lower = w.toLowerCase();
+      return job.originalText.toLowerCase().includes(lower) && !paraphrasedText.toLowerCase().includes(lower);
+    })
   };
   responseCache.set(job, response);
   return response;
@@ -130,7 +140,7 @@ paraphraseRouter.post('/', async (req: Request, res: Response) => {
 
   try {
     const parsed = paraphraseSchema.parse(req.body);
-    const { text, mode, synonymStrength, customInstruction, model, async: isAsync } = parsed;
+    const { text, mode, synonymStrength, customInstruction, model, async: isAsync, frozenWords } = parsed;
 
     const jobId = uuidv4();
     const job = new DocumentProcessingJob(
@@ -140,7 +150,8 @@ paraphraseRouter.post('/', async (req: Request, res: Response) => {
       synonymStrength as SynonymStrength,
       customInstruction,
       model,
-      config.sentencesInPrompt
+      config.sentencesInPrompt,
+      Array.from(new Set(frozenWords || []))
     );
 
     documentJobRegistry.register(job);
@@ -181,4 +192,55 @@ paraphraseRouter.post('/cancel/:jobId', (req: Request, res: Response) => {
     return res.status(404).json({ error: `Job ${jobId} not found or already completed.` });
   }
   return res.json({ status: 'cancelled', jobId });
+});
+
+// ----------------------------------------------------
+// Rephrase a single sentence: returns several alternatives to choose from
+// ----------------------------------------------------
+const sentenceSchema = z.object({
+  sentence: z.string().trim().min(2, 'Select a sentence to rephrase').max(1500, 'Select a shorter passage (max 1,500 characters)'),
+  context: z.string().max(3000).optional(),
+  mode: z.enum(['standard', 'fluency', 'formal', 'academic', 'simple', 'creative', 'expand', 'shorten', 'custom']).default('standard'),
+  count: z.number().int().min(1).max(5).default(3),
+  frozenWords: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+  model: z.string().optional()
+});
+
+paraphraseRouter.post('/sentence', async (req: Request, res: Response) => {
+  const signal = abortOnClientDisconnect(res);
+  try {
+    const { sentence, context, mode, count, frozenWords, model } = sentenceSchema.parse(req.body);
+    const raw = await executeLlmCompletion(
+      getSentenceAlternativesPrompt(mode, count, context, frozenWords || []),
+      sentence,
+      model,
+      0.8,
+      signal
+    );
+
+    let alternatives: string[] = [];
+    try {
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      alternatives = z.object({ alternatives: z.array(z.string()) }).parse(parsed).alternatives;
+    } catch {
+      return res.status(422).json({ error: 'The AI returned an unexpected format. Please try again.' });
+    }
+
+    const seen = new Set<string>([sentence.trim().toLowerCase()]);
+    const unique = alternatives
+      .map(a => a.trim())
+      .filter(a => a.length > 0 && !seen.has(a.toLowerCase()) && seen.add(a.toLowerCase()))
+      .slice(0, count);
+
+    return res.json({ sentence, alternatives: unique });
+  } catch (error: any) {
+    if (signal.aborted || isAbortError(error)) return;
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
+    console.error('Sentence rephrase error:', error.message || error);
+    return res.status(500).json({ error: error.message || 'Failed to rephrase sentence' });
+  }
 });

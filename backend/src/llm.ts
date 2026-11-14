@@ -104,9 +104,16 @@ export async function executeLlmCompletion(
   userPrompt: string,
   modelOverride?: string,
   temperature = 0.3,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  onToken?: (delta: string) => void
 ): Promise<string> {
-  return executeChatCompletion(systemPrompt, [{ role: 'user', content: userPrompt }], modelOverride, temperature, abortSignal);
+  return executeChatCompletion(systemPrompt, [{ role: 'user', content: userPrompt }], modelOverride, temperature, abortSignal, onToken);
+}
+
+/** Emits text in small word groups (used to simulate streaming in MOCK mode). */
+function emitInPieces(text: string, onToken: (delta: string) => void) {
+  const pieces = text.match(/\S+\s*|\s+/g) || [];
+  for (const piece of pieces) onToken(piece);
 }
 
 /**
@@ -117,7 +124,9 @@ export async function executeChatCompletion(
   conversation: ConversationMessage[],
   modelOverride?: string,
   temperature = 0.3,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  /** When provided, the completion is streamed and each text delta is passed here as it arrives */
+  onToken?: (delta: string) => void
 ): Promise<string> {
   const lastUser = [...conversation].reverse().find(m => m.role === 'user');
   const userPrompt = lastUser?.content ?? '';
@@ -140,7 +149,9 @@ export async function executeChatCompletion(
       abortErr.name = 'AbortError';
       throw abortErr;
     }
-    return executeSimulatedLlmCompletion(systemPrompt, userPrompt);
+    const simulated = executeSimulatedLlmCompletion(systemPrompt, userPrompt);
+    if (onToken) emitInPieces(simulated, onToken);
+    return simulated;
   }
 
   if (config.requestType === 'UNCONFIGURED') {
@@ -159,20 +170,32 @@ export async function executeChatCompletion(
   const model = modelOverride || getDefaultModel();
   let emptyCompletion = false;
 
-  try {
-    const response = await client.chat.completions.create(
-      {
-        model,
-        temperature,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...conversation.map(m => ({ role: m.role, content: m.content }))
-        ]
-      },
-      { signal: abortSignal }
-    );
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    ...conversation.map(m => ({ role: m.role, content: m.content }))
+  ];
 
-    let content = response.choices[0]?.message?.content || '';
+  try {
+    let content = '';
+    if (onToken) {
+      const stream = await client.chat.completions.create(
+        { model, temperature, messages, stream: true },
+        { signal: abortSignal }
+      );
+      for await (const part of stream) {
+        const delta = part.choices[0]?.delta?.content || '';
+        if (delta) {
+          content += delta;
+          onToken(delta);
+        }
+      }
+    } else {
+      const response = await client.chat.completions.create(
+        { model, temperature, messages },
+        { signal: abortSignal }
+      );
+      content = response.choices[0]?.message?.content || '';
+    }
 
     // Strip quotation wraps if mistakenly returned
     content = content.trim();
@@ -225,6 +248,40 @@ export function getDefaultModel(): string {
 export function executeSimulatedLlmCompletion(systemPrompt: string, userPrompt: string): string {
   if (config.env === 'production') {
     throw new Error('[ShivQuill Security] ZERO-MOCK POLICY: Simulated LLM completion cannot run in production.');
+  }
+
+  // Sentence alternatives simulation
+  if (systemPrompt.includes('SENTENCE ALTERNATIVES')) {
+    const base = userPrompt.trim().replace(/[.!?]+$/, '');
+    return JSON.stringify({
+      alternatives: [
+        `${base.replace(/\bimportant\b/gi, 'vital').replace(/\bhelp\b/gi, 'assist')}.`,
+        `In short, ${base.charAt(0).toLowerCase()}${base.slice(1)}.`,
+        `${base}, as noted.`
+      ]
+    });
+  }
+
+  // Tone analysis simulation
+  if (systemPrompt.includes('TONE ANALYST')) {
+    const formal = /\b(furthermore|therefore|consequently|regarding|hereby)\b/i.test(userPrompt);
+    return JSON.stringify({
+      primaryTone: formal ? 'Formal' : 'Neutral',
+      tones: [
+        { name: formal ? 'Formal' : 'Neutral', score: 72 },
+        { name: 'Confident', score: 55 },
+        { name: 'Friendly', score: 30 }
+      ],
+      formality: formal ? 80 : 50,
+      sentiment: 'neutral',
+      confidence: 60,
+      summary: formal ? 'Reads as formal and businesslike.' : 'Reads as balanced and matter-of-fact.'
+    });
+  }
+
+  // Tone rewrite simulation
+  if (systemPrompt.includes('TONE REWRITER')) {
+    return userPrompt.replace(/\bdon't\b/gi, 'do not').replace(/\bget\b/gi, 'obtain');
   }
 
   // Writing Suggestions simulation

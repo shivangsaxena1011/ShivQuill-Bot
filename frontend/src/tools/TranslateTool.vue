@@ -11,13 +11,32 @@
           <option v-for="l in languages" :key="l.code" :value="l.code">{{ l.name }}</option>
         </select>
       </div>
-      <span v-if="result" class="badge">Detected: {{ result.detectedSourceLang }}</span>
+      <div class="row">
+        <span v-if="result && !req.loading.value" class="badge">Detected: {{ result.detectedSourceLang }}</span>
+        <button class="btn btn-sm" type="button" :class="{ 'btn-primary': showGlossary }" @click="showGlossary = !showGlossary">
+          <BookA /> Glossary<span v-if="glossary.length"> ({{ glossary.length }})</span>
+        </button>
+      </div>
+    </div>
+
+    <div v-if="showGlossary" class="card card-pad stack" style="gap: 8px">
+      <div class="spread">
+        <span class="small muted">Terms that must always be translated a certain way (names, products, jargon). Saved in this browser.</span>
+        <button v-if="glossary.length" class="btn btn-ghost btn-sm" type="button" @click="glossary = []">Clear all</button>
+      </div>
+      <div v-for="(g, i) in glossary" :key="i" class="row">
+        <input v-model="g.source" class="input" placeholder="Term in source text" maxlength="100" aria-label="Source term" />
+        <span class="faint">→</span>
+        <input v-model="g.target" class="input" placeholder="Always translate as" maxlength="100" aria-label="Translation" />
+        <button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Remove term" @click="glossary.splice(i, 1)"><X /></button>
+      </div>
+      <div><button class="btn btn-sm" type="button" :disabled="glossary.length >= 100" @click="glossary.push({ source: '', target: '' })"><Plus /> Add term</button></div>
     </div>
 
     <StatusBits kind="error" :message="req.error.value" @dismiss="req.error.value = ''" />
 
     <div class="split">
-      <EditorPane v-model="input" title="Source text" placeholder="Type or paste text to translate…" @submit="run">
+      <EditorPane v-model="input" tool="translate" title="Source text" placeholder="Type or paste text to translate…" @submit="run">
         <template #foot>
           <button v-if="req.loading.value" class="btn btn-danger btn-sm" type="button" @click="req.cancel()"><Square /> Stop</button>
           <button class="btn btn-primary" type="button" :disabled="req.loading.value || !input.trim()" @click="run"><Languages /> Translate</button>
@@ -27,10 +46,16 @@
       <div class="card pane">
         <div class="pane-head">
           <span class="pane-title">{{ targetName }}</span>
-          <button v-if="result" class="btn btn-ghost btn-sm btn-icon" type="button" title="Copy" @click="copyText(result.translatedText)"><Copy /></button>
+          <div v-if="result" class="row">
+            <button class="btn btn-ghost btn-sm btn-icon" type="button" title="Copy" @click="copyText(result.translatedText)"><Copy /></button>
+            <ExportMenu :text="result.translatedText" :title="`Translation (${targetName})`" />
+          </div>
         </div>
         <div class="pane-body">
-          <StatusBits v-if="req.loading.value" kind="loading" message="Translating…" />
+          <template v-if="req.loading.value">
+            <div v-if="live.text.value" class="output-text streaming" :dir="rtlTarget ? 'rtl' : 'auto'">{{ live.visible.value }}</div>
+            <StatusBits v-else kind="loading" message="Translating…" />
+          </template>
           <div v-else-if="result" class="output-text" :dir="rtl ? 'rtl' : 'auto'">{{ result.translatedText }}</div>
           <StatusBits v-else kind="empty" message="The translation will appear here.">
             <template #icon><Languages /></template>
@@ -43,12 +68,17 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { ArrowLeftRight, Copy, Languages, Square } from 'lucide-vue-next';
+import { ArrowLeftRight, BookA, Copy, Languages, Plus, Square, X } from 'lucide-vue-next';
 import EditorPane from '../components/EditorPane.vue';
 import StatusBits from '../components/StatusBits.vue';
-import { api, type TranslateResult } from '../api';
+import ExportMenu from '../components/ExportMenu.vue';
+import { api, type GlossaryEntry, type TranslateResult } from '../api';
 import { useRequest } from '../composables/useRequest';
-import { copyText, persisted, shareToolText } from '../store';
+import { useLiveText } from '../composables/useLiveText';
+import { copyText, persistedJson, useToolInput } from '../store';
+import { addHistory } from '../lib/db';
+
+const RTL = ['ar', 'he', 'fa', 'ur'];
 
 // Fallback until the server list loads (the server is the source of truth)
 const languages = ref<{ code: string; name: string }[]>([
@@ -62,15 +92,18 @@ onMounted(async () => {
   } catch { /* keep fallback */ }
 });
 
-const input = persisted('translate', 'Welcome to ShivQuill, a writing assistant that helps you write clearly and confidently.');
-shareToolText('translate', input);
+const input = useToolInput('translate', 'Welcome to ShivQuill, a writing assistant that helps you write clearly and confidently.');
 const source = ref('auto');
 const target = ref('es');
+const glossary = persistedJson<GlossaryEntry[]>('glossary', []);
+const showGlossary = ref(false);
 const result = ref<TranslateResult | null>(null);
 const req = useRequest();
+const live = useLiveText();
 
 const targetName = computed(() => languages.value.find(l => l.code === target.value)?.name || 'Translation');
-const rtl = computed(() => ['ar', 'he', 'fa', 'ur'].includes(result.value?.targetLang || ''));
+const rtl = computed(() => RTL.includes(result.value?.targetLang || ''));
+const rtlTarget = computed(() => RTL.includes(target.value));
 
 function swap() {
   if (source.value === 'auto') return;
@@ -83,7 +116,15 @@ function swap() {
 
 async function run() {
   if (!input.value.trim() || req.loading.value) return;
-  const r = await req.run(signal => api.translate(input.value, source.value, target.value, { signal }));
-  if (r) result.value = r;
+  live.reset();
+  const text = input.value;
+  const terms = glossary.value
+    .map(g => ({ source: g.source.trim(), target: g.target.trim() }))
+    .filter(g => g.source && g.target);
+  const r = await req.run(signal => api.translate(text, source.value, target.value, terms, { signal, onDelta: live.append }));
+  if (r) {
+    result.value = r;
+    addHistory({ tool: 'translate', label: `Translate → ${targetName.value}`, input: text, output: r.translatedText });
+  }
 }
 </script>

@@ -12,6 +12,7 @@
       <EditorPane
         ref="editor"
         v-model="input"
+        :tool="kind"
         :title="kind === 'grammar' ? 'Text to proofread' : 'Text to improve'"
         :placeholder="kind === 'grammar' ? 'Paste text to check grammar, spelling and punctuation…' : 'Paste text to get clarity, tone and conciseness suggestions…'"
         @submit="run"
@@ -84,7 +85,8 @@ import EditorPane from '../components/EditorPane.vue';
 import StatusBits from '../components/StatusBits.vue';
 import { api } from '../api';
 import { useRequest } from '../composables/useRequest';
-import { persisted, shareToolText, showToast } from '../store';
+import { showToast, useToolInput } from '../store';
+import { addHistory } from '../lib/db';
 import { applyAllEdits, applyEdit, locateEdit, type OffsetEdit } from '../lib/text';
 
 const props = defineProps<{ kind: 'grammar' | 'suggestions' }>();
@@ -107,8 +109,7 @@ const sample = props.kind === 'grammar'
   ? 'Teh results of the experiment was completely unexpected, because nobody checked teh calibration before they starts.'
   : 'In order to achieve our quarterly targets, it is very important that we utilize modern engineering pipelines due to the fact that they are faster.';
 
-const input = persisted(props.kind, sample);
-shareToolText(props.kind, input);
+const input = useToolInput(props.kind, sample);
 const focus = ref('all');
 const items = ref<Item[] | null>(null);
 const summary = ref('');
@@ -143,6 +144,12 @@ async function run() {
     // Drop no-op items (model sometimes "corrects" text to itself)
     items.value = res.items.filter(i => i.original !== i.replacement);
     summary.value = res.summary;
+    addHistory({
+      tool: props.kind,
+      label: props.kind === 'grammar' ? `Grammar · ${items.value.length} issues` : `Suggestions · ${items.value.length}`,
+      input: text,
+      output: items.value.map(i => `${i.original} → ${i.replacement}: ${i.explanation}`).join('\n')
+    });
   }
 }
 

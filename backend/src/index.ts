@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -16,6 +17,7 @@ import { originalityRouter } from './routes/originality.js';
 import { chatRouter } from './routes/chat.js';
 import { tasksRouter } from './routes/tasks.js';
 import { suggestionsRouter } from './routes/suggestions.js';
+import { toneRouter } from './routes/tone.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +76,15 @@ app.use(cors((req, callback) => {
   callback(null, { origin: allowed, credentials: true });
 }));
 
+// 2b. Gzip responses (large JSON such as diff spans shrinks ~5-10x). Streams are never buffered.
+app.use(compression({
+  filter: (req, res) => {
+    if (String(res.getHeader('Content-Type') || '').includes('text/event-stream')) return false;
+    if (req.query.stream === '1' || (req.headers.accept || '').includes('text/event-stream')) return false;
+    return compression.filter(req, res);
+  }
+}));
+
 // 3. Body Parser with Generous Limit for Document Processing (10mb)
 app.use(express.json({ limit: '10mb' }));
 
@@ -96,9 +107,14 @@ const aiLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'AI request limit reached. Please wait a minute and try again.' }
 });
-for (const route of ['/api/paraphrase', '/api/grammar', '/api/humanize', '/api/summarize', '/api/translate', '/api/chat', '/api/suggestions']) {
-  app.post(route, aiLimiter);
-}
+// Applies to every POST under these prefixes (e.g. /api/paraphrase/sentence, /api/tone/rewrite),
+// except job cancellation, which must always be allowed.
+const AI_PREFIXES = ['/api/paraphrase', '/api/grammar', '/api/humanize', '/api/summarize', '/api/translate', '/api/chat', '/api/suggestions', '/api/tone'];
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'POST' || req.path.includes('/cancel')) return next();
+  if (AI_PREFIXES.some(p => req.path === p || req.path.startsWith(`${p}/`))) return aiLimiter(req, res, next);
+  return next();
+});
 
 // 4b. Model allowlist: clients may not select arbitrary (e.g. expensive) provider models
 app.use('/api/', (req: Request, res: Response, next: NextFunction) => {
@@ -121,6 +137,7 @@ app.use('/api/originality', originalityRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/suggestions', suggestionsRouter);
+app.use('/api/tone', toneRouter);
 
 // Health & Engine Status Check
 app.get('/api/health', (req: Request, res: Response) => {
@@ -132,7 +149,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'ShivQuill AI Writing Platform',
-    version: '2.2.0',
+    version: '2.3.0',
     environment: config.env,
     provider: config.requestType,
     providerStatus: isMock ? 'mock_simulation' : isUnconfigured ? 'unconfigured' : providerStatus.ready ? 'ready' : 'error',
@@ -147,7 +164,17 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // Serve frontend build if available
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
-app.use(express.static(frontendDistPath));
+// Hashed build assets never change → cache for a year. index.html / sw.js must always revalidate
+// so users get new releases immediately.
+app.use(express.static(frontendDistPath, {
+  setHeaders(res, filePath) {
+    if (/[\\/]assets[\\/]/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
   if (req.path.startsWith('/api')) {

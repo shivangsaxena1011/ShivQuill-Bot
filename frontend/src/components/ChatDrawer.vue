@@ -20,7 +20,8 @@
 
       <div ref="log" class="chat-log">
         <div v-for="(m, i) in messages" :key="i" class="bubble" :class="m.role">{{ m.content }}</div>
-        <div v-if="req.loading.value" class="bubble assistant faint"><LoaderCircle class="spin" :size="14" /> Thinking…</div>
+        <div v-if="req.loading.value && live.text.value" class="bubble assistant">{{ live.text.value }}</div>
+        <div v-else-if="req.loading.value" class="bubble assistant faint"><LoaderCircle class="spin" :size="14" /> Thinking…</div>
         <StatusBits kind="error" :message="req.error.value" @dismiss="req.error.value = ''" />
       </div>
 
@@ -47,6 +48,7 @@ import { Bot, LoaderCircle, Send, Square, X } from 'lucide-vue-next';
 import StatusBits from './StatusBits.vue';
 import { api, type ChatTurn } from '../api';
 import { useRequest } from '../composables/useRequest';
+import { useLiveText } from '../composables/useLiveText';
 import { workspace } from '../store';
 
 const greeting: ChatTurn = { role: 'assistant', content: 'Hi! I can brainstorm, critique tone and clarity, or suggest better transitions. Ask me anything about your text.' };
@@ -55,6 +57,7 @@ const draft = ref('');
 const useContext = ref(true);
 const log = ref<HTMLElement | null>(null);
 const req = useRequest();
+const live = useLiveText(1_000_000);
 const quick = ['Critique the tone and clarity', 'Suggest 3 titles', 'Improve paragraph transitions'];
 
 const CONTEXT_LIMIT = 100_000; // server maximum
@@ -81,7 +84,14 @@ async function send(text?: string) {
 
   // The greeting is UI-only; send real turns (last 20) to keep requests light
   const turns = messages.value.filter(m => m !== greeting).slice(-20);
-  const reply = await req.run(signal => api.chat(turns, useContext.value && contextText.value ? contextText.value : undefined, { signal }));
+  live.reset();
+  const reply = await req.run(signal => api.chat(turns, useContext.value && contextText.value ? contextText.value : undefined, {
+    signal,
+    onDelta: d => {
+      live.append(d);
+      scrollDown();
+    }
+  }));
   if (reply) messages.value.push({ role: 'assistant', content: reply.content });
   else if (!req.error.value) messages.value.pop(); // cancelled: drop the unanswered question
   scrollDown();

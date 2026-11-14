@@ -24,6 +24,7 @@
       </template>
       <div class="sidebar-foot">
         <button class="nav-item" type="button" @click="workspace.chatOpen = true"><MessageSquare /> Ask the assistant</button>
+        <button class="nav-item" type="button" @click="workspace.shortcutsOpen = true"><Keyboard /> Shortcuts <kbd class="kbd">?</kbd></button>
       </div>
     </aside>
 
@@ -51,7 +52,8 @@
           <button class="btn btn-ghost btn-icon" type="button" :title="`Theme: ${theme}`" aria-label="Toggle theme" @click="toggleTheme">
             <Moon v-if="isDark" /><Sun v-else />
           </button>
-          <button class="btn btn-icon" type="button" title="Writing assistant" aria-label="Open writing assistant" @click="workspace.chatOpen = true"><MessageSquare /></button>
+          <button v-if="installPrompt" class="btn btn-sm" type="button" title="Install ShivQuill as an app" @click="install"><Download /> Install</button>
+          <button class="btn btn-icon" type="button" title="Writing assistant (Ctrl+/)" aria-label="Open writing assistant" @click="workspace.chatOpen = true"><MessageSquare /></button>
         </div>
       </header>
 
@@ -77,16 +79,18 @@
     </div>
 
     <ChatDrawer />
+    <ShortcutsDialog :tools="allTools" />
     <Transition name="fade"><div v-if="toast" class="toast" role="status">{{ toast }}</div></Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref, type Component } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import {
-  CircleAlert, FileText, Languages, Lightbulb, LoaderCircle, MessageSquare, Moon,
-  PenLine, Quote, RefreshCw, ScanSearch, ShieldCheck, Sparkles, SpellCheck, Sun
+  BookOpenCheck, CircleAlert, Download, FileText, Gauge, Keyboard, Languages, Library, Lightbulb, LoaderCircle,
+  MessageSquare, Moon, PenLine, Quote, RefreshCw, ScanSearch, ShieldCheck, Sparkles, SpellCheck, Sun
 } from 'lucide-vue-next';
+import ShortcutsDialog from './components/ShortcutsDialog.vue';
 import ChatDrawer from './components/ChatDrawer.vue';
 import { workspace, toast, type ToolId } from './store';
 import { useServerStatus } from './composables/useServerStatus';
@@ -100,6 +104,9 @@ const TranslateTool = defineAsyncComponent(() => import('./tools/TranslateTool.v
 const DetectorTool = defineAsyncComponent(() => import('./tools/DetectorTool.vue'));
 const PlagiarismTool = defineAsyncComponent(() => import('./tools/PlagiarismTool.vue'));
 const CitationTool = defineAsyncComponent(() => import('./tools/CitationTool.vue'));
+const ToneTool = defineAsyncComponent(() => import('./tools/ToneTool.vue'));
+const ReadabilityTool = defineAsyncComponent(() => import('./tools/ReadabilityTool.vue'));
+const LibraryTool = defineAsyncComponent(() => import('./tools/LibraryTool.vue'));
 
 interface ToolDef {
   id: ToolId;
@@ -118,14 +125,16 @@ const groups: { title: string; tools: ToolDef[] }[] = [
       { id: 'paraphrase', name: 'Paraphraser', short: 'Paraphrase', description: 'Rewrite text in 9 styles while keeping facts, numbers and citations intact.', icon: PenLine, component: ParaphraseTool },
       { id: 'grammar', name: 'Grammar Checker', short: 'Grammar', description: 'Find and fix grammar, spelling and punctuation mistakes.', icon: SpellCheck, component: ReviewTool, props: { kind: 'grammar' } },
       { id: 'suggestions', name: 'Writing Suggestions', short: 'Suggestions', description: 'Sharpen clarity, tone, word choice and conciseness.', icon: Lightbulb, component: ReviewTool, props: { kind: 'suggestions' } },
-      { id: 'humanize', name: 'Humanizer', short: 'Humanize', description: 'Turn stiff, formulaic text into a natural human voice.', icon: Sparkles, component: HumanizeTool }
+      { id: 'humanize', name: 'Humanizer', short: 'Humanize', description: 'Turn stiff, formulaic text into a natural human voice.', icon: Sparkles, component: HumanizeTool },
+      { id: 'tone', name: 'Tone', short: 'Tone', description: 'See how your writing sounds, then switch it to the tone you want.', icon: Gauge, component: ToneTool }
     ]
   },
   {
     title: 'Understand',
     tools: [
       { id: 'summarize', name: 'Summarizer', short: 'Summarize', description: 'Condense long documents into key points or a short paragraph.', icon: FileText, component: SummarizeTool },
-      { id: 'translate', name: 'Translator', short: 'Translate', description: 'Translate between 36 languages, keeping tone and formatting.', icon: Languages, component: TranslateTool }
+      { id: 'translate', name: 'Translator', short: 'Translate', description: 'Translate between 36 languages, keeping tone and formatting.', icon: Languages, component: TranslateTool },
+      { id: 'readability', name: 'Readability', short: 'Readability', description: 'Grade level, reading time, passive voice, long sentences and repeated words — live, in your browser.', icon: BookOpenCheck, component: ReadabilityTool }
     ]
   },
   {
@@ -133,7 +142,13 @@ const groups: { title: string; tools: ToolDef[] }[] = [
     tools: [
       { id: 'detector', name: 'AI Pattern Check', short: 'AI check', description: 'Experimental statistics on how uniform the writing looks.', icon: ScanSearch, component: DetectorTool },
       { id: 'plagiarism', name: 'Plagiarism Check', short: 'Plagiarism', description: 'Compare text with the indexed reference library.', icon: ShieldCheck, component: PlagiarismTool },
-      { id: 'citation', name: 'Citation Generator', short: 'Cite', description: 'APA, MLA, Chicago and Harvard references — auto-filled from a DOI.', icon: Quote, component: CitationTool }
+      { id: 'citation', name: 'Citation Generator', short: 'Cite', description: 'APA, MLA, Chicago and Harvard references from a DOI or ISBN, with BibTeX/RIS export.', icon: Quote, component: CitationTool }
+    ]
+  },
+  {
+    title: 'Workspace',
+    tools: [
+      { id: 'library', name: 'Library', short: 'Library', description: 'Your saved documents and recent results, stored in this browser.', icon: Library, component: LibraryTool }
     ]
   }
 ];
@@ -154,6 +169,49 @@ onMounted(() => {
   const idle = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1500));
   idle(() => { import('./tools/ReviewTool.vue'); import('./tools/SummarizeTool.vue'); });
 });
+
+// ---------------- Keyboard shortcuts ----------------
+function isTyping(e: KeyboardEvent) {
+  const el = e.target as HTMLElement | null;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+}
+function onGlobalKey(e: KeyboardEvent) {
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.altKey && !mod && /^Digit[0-9]$/.test(e.code)) {
+    const n = Number(e.code.slice(5));
+    const tool = allTools[n === 0 ? 9 : n - 1];
+    if (tool) {
+      e.preventDefault();
+      select(tool.id);
+    }
+  } else if (mod && e.key === '/') {
+    e.preventDefault();
+    workspace.chatOpen = !workspace.chatOpen;
+  } else if (e.key === 'Escape') {
+    if (workspace.shortcutsOpen) workspace.shortcutsOpen = false;
+    else if (workspace.chatOpen) workspace.chatOpen = false;
+  } else if (e.key === '?' && !isTyping(e)) {
+    e.preventDefault();
+    workspace.shortcutsOpen = !workspace.shortcutsOpen;
+  }
+}
+onMounted(() => window.addEventListener('keydown', onGlobalKey));
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey));
+
+// ---------------- Install as an app (PWA) ----------------
+const installPrompt = ref<any>(null);
+window.addEventListener('beforeinstallprompt', (e: Event) => {
+  e.preventDefault();
+  installPrompt.value = e;
+});
+window.addEventListener('appinstalled', () => (installPrompt.value = null));
+async function install() {
+  const p = installPrompt.value;
+  if (!p) return;
+  p.prompt();
+  await p.userChoice.catch(() => undefined);
+  installPrompt.value = null;
+}
 
 // ---------------- Server status ----------------
 const { state, health, retry } = useServerStatus();

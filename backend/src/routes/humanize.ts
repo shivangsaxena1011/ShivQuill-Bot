@@ -7,6 +7,8 @@ import { HumanizeResponse } from '../types.js';
 import { config } from '../config.js';
 import { splitIntoBatches, joinBatchOutputs, mapBatches } from '../batching.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
+import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+
 
 export const humanizeRouter = Router();
 
@@ -46,14 +48,22 @@ function calculateFleschScore(text: string): number {
 
 humanizeRouter.post('/', async (req: Request, res: Response) => {
   const signal = abortOnClientDisconnect(res);
+  let stream: SseChannel | null = null;
   try {
     const { text, readabilityLevel, model } = humanizeSchema.parse(req.body);
     const systemPrompt = getHumanizeSystemPrompt(readabilityLevel);
+    if (wantsStream(req)) stream = openSse(res);
+    const onToken = stream ? (d: string) => stream!.send('delta', { text: d }) : undefined;
 
     const batched = splitIntoBatches(text, config.maxCharsPerRequest);
+    if (batched.leading) onToken?.(batched.leading);
     const outputs = await mapBatches(
       batched,
-      batch => executeLlmCompletion(systemPrompt, batch.text, model, 0.4, signal),
+      async batch => {
+        const out = await executeLlmCompletion(systemPrompt, batch.text, model, 0.4, signal, onToken);
+        onToken?.(batch.separator);
+        return out;
+      },
       signal
     );
     const humanizedText = joinBatchOutputs(batched, outputs);
@@ -88,15 +98,16 @@ humanizeRouter.post('/', async (req: Request, res: Response) => {
       diffSpans
     };
 
-    return res.json(response);
+    return finish(res, stream, response);
   } catch (error: any) {
     if (signal.aborted || isAbortError(error)) {
+      stream?.end();
       return; // client disconnected; nothing to send
     }
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+      return fail(res, stream, 400, error.errors[0].message);
     }
-    console.error('Humanize error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to humanize text' });
+    console.error('Humanize error:', error.message || error);
+    return fail(res, stream, 500, error.message || 'Failed to humanize text');
   }
 });

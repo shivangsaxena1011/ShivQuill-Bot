@@ -59,6 +59,8 @@ export interface DocumentJobProgress {
   recombinedText?: string;
   partialRecovery: boolean;
   errorMessage?: string;
+  /** Live preview of the latest rewritten chunk while processing */
+  latestText?: string;
 }
 
 export class DocumentProcessingJob {
@@ -81,7 +83,9 @@ export class DocumentProcessingJob {
     public synonymStrength: SynonymStrength = 2,
     public customInstruction?: string,
     public model?: string,
-    public sentencesPerChunk = 3
+    public sentencesPerChunk = 3,
+    /** Words/phrases that must appear unchanged in the rewrite */
+    public frozenWords: string[] = []
   ) {
     this.id = jobId;
     this.prepareChunks();
@@ -136,8 +140,20 @@ export class DocumentProcessingJob {
       progressPercent,
       recombinedText: this.status === 'completed' ? this.recombine() : undefined,
       partialRecovery: this.partialRecovery && this.status !== 'cancelled',
-      errorMessage: this.errorMessage
+      errorMessage: this.errorMessage,
+      latestText: this.status === 'processing' ? this.latestCompletedText() : undefined
     };
+  }
+
+  /** The most recently rewritten piece (short), shown as a live preview while a job runs. */
+  private latestCompletedText(): string | undefined {
+    for (let i = this.chunks.length - 1; i >= 0; i--) {
+      const c = this.chunks[i];
+      if (c.status === 'completed' && c.rewrittenText) {
+        return c.rewrittenText.length > 600 ? `${c.rewrittenText.slice(0, 600)}…` : c.rewrittenText;
+      }
+    }
+    return undefined;
   }
 
   public isCancelled(): boolean {
@@ -177,7 +193,9 @@ export class DocumentProcessingJob {
           const systemPrompt = getParaphraseSystemPrompt(
             this.mode,
             this.synonymStrength,
-            this.rollingContext
+            this.rollingContext,
+            // Only send frozen terms that actually occur in this chunk (keeps prompts short)
+            this.frozenWords.filter(w => chunk.originalText.toLowerCase().includes(w.toLowerCase()))
           );
 
           let userPrompt = chunk.originalText;

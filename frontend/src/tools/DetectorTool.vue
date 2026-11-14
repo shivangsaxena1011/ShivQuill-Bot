@@ -69,11 +69,10 @@ import { CircleAlert, ScanSearch } from 'lucide-vue-next';
 import StatusBits from '../components/StatusBits.vue';
 import { api, type DetectorResult } from '../api';
 import { useRequest } from '../composables/useRequest';
-import { persisted, shareToolText } from '../store';
+import { useToolInput } from '../store';
 
 const sample = 'Furthermore, it is important to remember that utilizing advanced algorithms provides a testament to our system capabilities. Moreover, the framework ensures robust scalability across diverse environments. In conclusion, this approach delivers significant value to all stakeholders involved.';
-const input = persisted('detector', sample);
-shareToolText('detector', input);
+const input = useToolInput('detector', sample);
 const result = ref<DetectorResult | null>(null);
 const req = useRequest();
 

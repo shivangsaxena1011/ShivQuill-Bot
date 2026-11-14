@@ -194,7 +194,7 @@ export interface CitationResponse {
   fullBibliographyEntry: string;
   sourceType: string;
   isVerified: boolean;
-  sourceOrigin: 'crossref_doi' | 'user_supplied';
+  sourceOrigin: 'crossref_doi' | 'openlibrary_isbn' | 'user_supplied';
   retrievedMetadata?: {
     doi?: string;
     containerTitle?: string;

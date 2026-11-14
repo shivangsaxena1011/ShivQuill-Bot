@@ -1,6 +1,6 @@
 {
   "name": "shivquill",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "description": "Production-Grade AI Writing Platform inspired by QuillBot and built with independent architecture",
   "scripts": {
@@ -8,7 +8,7 @@
     "build:backend": "npm --prefix backend run build",
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:backend && npm run build:frontend",
-    "test": "npm --prefix backend test",
+    "test": "npm --prefix backend test && npm --prefix frontend test",
     "benchmark": "node benchmarks/generate_samples.js && node benchmarks/run_benchmark.js",
     "benchmark:mock": "node benchmarks/generate_samples.js && node benchmarks/run_benchmark.js --mock",
     "start": "node backend/dist/index.js",

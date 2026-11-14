@@ -68,19 +68,25 @@ export function applyEdit<T extends OffsetEdit>(text: string, edit: T, remaining
 
 /** Applies all non-overlapping edits from the end of the text backwards (offsets stay valid). */
 export function applyAllEdits<T extends OffsetEdit>(text: string, edits: T[]): { text: string; appliedIds: Set<string> } {
+  // Pick non-overlapping edits in reading order (earlier edit wins a conflict)…
   const positioned = edits
     .map(e => ({ e, at: locateEdit(text, e) }))
     .filter(x => x.at !== -1)
-    .sort((a, b) => b.at - a.at);
+    .sort((a, b) => a.at - b.at);
+  const chosen: typeof positioned = [];
+  let lastEnd = -1;
+  for (const p of positioned) {
+    if (p.at < lastEnd) continue; // overlaps an earlier chosen edit
+    chosen.push(p);
+    lastEnd = p.at + p.e.original.length;
+  }
 
+  // …then apply from the end backwards so earlier offsets stay valid
   let result = text;
-  let lowestStart = Infinity;
   const appliedIds = new Set<string>();
-  for (const { e, at } of positioned) {
-    const endAt = at + e.original.length;
-    if (endAt > lowestStart) continue; // overlaps an edit already applied
-    result = result.slice(0, at) + e.replacement + result.slice(endAt);
-    lowestStart = at;
+  for (let i = chosen.length - 1; i >= 0; i--) {
+    const { e, at } = chosen[i];
+    result = result.slice(0, at) + e.replacement + result.slice(at + e.original.length);
     appliedIds.add(e.id);
   }
   return { text: result, appliedIds };

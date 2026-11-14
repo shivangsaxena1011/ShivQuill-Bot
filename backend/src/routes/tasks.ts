@@ -13,7 +13,8 @@ tasksRouter.get('/:id', (req: Request, res: Response) => {
   if (docJob) {
     const progress = docJob.getProgress();
     if (progress.status === 'completed') {
-      return res.json({ ...progress, result: buildParaphraseResponse(docJob) });
+      // `result` already contains the full text; omit the duplicate recombinedText
+      return res.json({ ...progress, recombinedText: undefined, result: buildParaphraseResponse(docJob) });
     }
     return res.json(progress);
   }

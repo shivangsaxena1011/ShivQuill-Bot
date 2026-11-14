@@ -1,6 +1,30 @@
-# ShivQuill v2.2 — Production-Grade AI Writing Platform (Release Candidate)
+# ShivQuill v2.3 — Production-Grade AI Writing Platform
 
 ShivQuill is an independently architected, production-grade AI writing platform designed to match the functional workflows of QuillBot with strict zero-mock enforcement, large document support (up to 1,000,000 characters / ~150,000 words), hardened cancellation orchestration, and transparent originality metrics.
+
+---
+
+## ✨ New in v2.3
+
+| Feature | Where | Runs on |
+|---|---|---|
+| Streaming replies (text appears as it's written) | Chat, Summarizer, Translator, Humanizer, Tone; live preview for Paraphraser jobs | Server (SSE) |
+| Compare paraphrase modes side by side (up to 3) | Paraphraser → "Compare" | Server |
+| Keep-these-words list | Paraphraser → "Keep unchanged" | Server (prompt) |
+| Rephrase one selected sentence (3 alternatives) | Paraphraser → "Rephrase selection" | Server |
+| Tone analyzer + tone changer (8 tones) | Tone page | Server |
+| Translator glossary (fixed term translations) | Translator → "Glossary" | Server (prompt) |
+| Saved custom-style presets | Paraphraser → Custom mode | Browser |
+| Import `.txt`, `.md`, `.docx` (button or drag-and-drop) | Every editor | Browser |
+| Export `.docx`, PDF (print), `.md`, `.txt` | Every result | Browser |
+| Readability dashboard: grade level, reading ease, reading time, passive voice, long sentences, sentence-length chart | Readability page | Browser |
+| Word frequency + repetition highlighter | Readability page | Browser |
+| History and saved documents (IndexedDB), undo/redo in editors | Library page, editor toolbar | Browser |
+| Installable app (PWA, offline shell) and keyboard shortcuts (`?` for the list) | Everywhere | Browser |
+| Citations: ISBN lookup (OpenLibrary), BibTeX/RIS export, saved bibliography | Citation Generator | Server + browser |
+| Plagiarism reference library grown to 309 real documents (arXiv abstracts, CC0) | Plagiarism Check | Server (~11 MB RAM) |
+
+Refresh the arXiv reference set with `npm --prefix backend run corpus:fetch`. Set `CORPUS_EXTRA=off` to load only the 5 built-in documents.
 
 ---
 

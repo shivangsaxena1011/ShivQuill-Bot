@@ -6,6 +6,8 @@ import { SummarizeResponse } from '../types.js';
 import { config } from '../config.js';
 import { splitIntoBatches, mapBatches } from '../batching.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
+import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+
 
 export const summarizeRouter = Router();
 
@@ -25,7 +27,8 @@ async function summarizeLarge(
   format: 'paragraph' | 'bullet',
   length: 'short' | 'medium' | 'long',
   model: string | undefined,
-  signal: AbortSignal
+  signal: AbortSignal,
+  stream: SseChannel | null = null
 ): Promise<string> {
   const limit = config.maxCharsPerRequest;
   const mapPrompt = getSummarizeSystemPrompt('paragraph', 'long');
@@ -35,20 +38,27 @@ async function summarizeLarge(
     const batched = splitIntoBatches(working, limit);
     const partials = await mapBatches(
       batched,
-      batch => executeLlmCompletion(mapPrompt, batch.text, model, 0.2, signal),
+      (batch, i) => {
+        stream?.send('status', { message: `Reading part ${i + 1} of ${batched.batches.length}…` });
+        return executeLlmCompletion(mapPrompt, batch.text, model, 0.2, signal);
+      },
       signal
     );
     working = partials.map(p => p.trim()).join('\n\n');
   }
-  return executeLlmCompletion(getSummarizeSystemPrompt(format, length), working, model, 0.2, signal);
+  stream?.send('status', { message: 'Writing summary…' });
+  const onToken = stream ? (d: string) => stream.send('delta', { text: d }) : undefined;
+  return executeLlmCompletion(getSummarizeSystemPrompt(format, length), working, model, 0.2, signal, onToken);
 }
 
 summarizeRouter.post('/', async (req: Request, res: Response) => {
   const signal = abortOnClientDisconnect(res);
+  let stream: SseChannel | null = null;
   try {
     const { text, format, length, model } = summarizeSchema.parse(req.body);
+    if (wantsStream(req)) stream = openSse(res);
 
-    const summary = await summarizeLarge(text, format, length, model, signal);
+    const summary = await summarizeLarge(text, format, length, model, signal, stream);
 
     const countWords = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
     const origWords = countWords(text);
@@ -72,15 +82,16 @@ summarizeRouter.post('/', async (req: Request, res: Response) => {
       keyPoints
     };
 
-    return res.json(response);
+    return finish(res, stream, response);
   } catch (error: any) {
     if (signal.aborted || isAbortError(error)) {
+      stream?.end();
       return; // client disconnected; nothing to send
     }
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+      return fail(res, stream, 400, error.errors[0].message);
     }
-    console.error('Summarize error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to generate summary' });
+    console.error('Summarize error:', error.message || error);
+    return fail(res, stream, 500, error.message || 'Failed to generate summary');
   }
 });

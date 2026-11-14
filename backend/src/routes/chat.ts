@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeChatCompletion } from '../llm.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
+import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+
 
 export const chatRouter = Router();
 
@@ -31,6 +33,7 @@ function sanitizeContext(rawContext: string): string {
 
 chatRouter.post('/', async (req: Request, res: Response) => {
   const signal = abortOnClientDisconnect(res);
+  let stream: SseChannel | null = null;
   try {
     const { messages, documentContext, model } = chatSchema.parse(req.body);
 
@@ -56,20 +59,20 @@ Be concise, practical, and provide concrete examples when suggesting alternative
     // Providers expect the first non-system turn to be from the user
     while (conversation.length > 1 && conversation[0].role !== 'user') conversation.shift();
 
-    const reply = await executeChatCompletion(systemPrompt, conversation, model, 0.7, signal);
+    if (wantsStream(req)) stream = openSse(res);
+    const onToken = stream ? (d: string) => stream!.send('delta', { text: d }) : undefined;
+    const reply = await executeChatCompletion(systemPrompt, conversation, model, 0.7, signal, onToken);
 
-    return res.json({
-      role: 'assistant',
-      content: reply
-    });
+    return finish(res, stream, { role: 'assistant', content: reply });
   } catch (error: any) {
     if (signal.aborted || isAbortError(error)) {
+      stream?.end();
       return; // client disconnected; nothing to send
     }
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+      return fail(res, stream, 400, error.errors[0].message);
     }
-    console.error('Chat error:', error);
-    return res.status(500).json({ error: error.message || 'Chat completion failed' });
+    console.error('Chat error:', error.message || error);
+    return fail(res, stream, 500, error.message || 'Chat completion failed');
   }
 });
