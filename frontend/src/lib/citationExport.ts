@@ -19,7 +19,7 @@ function citeKey(r: Resolved): string {
   return `${family}${r.year && /^\d{4}$/.test(r.year) ? r.year : ''}${word}`;
 }
 
-export function toBibTeX(r: Resolved): string {
+export function toBibTeX(r: Resolved, key = citeKey(r)): string {
   const type = r.sourceType === 'journal' ? 'article' : r.sourceType === 'book' ? 'book' : 'misc';
   const fields: Array<[string, string | undefined]> = [
     ['title', r.title],
@@ -37,7 +37,29 @@ export function toBibTeX(r: Resolved): string {
     .filter(([, v]) => v && v.trim())
     .map(([k, v]) => `  ${k} = {${k === 'url' || k === 'doi' ? v : bibEscape(v!)}}`)
     .join(',\n');
-  return `@${type}{${citeKey(r)},\n${body}\n}`;
+  return `@${type}{${key},\n${body}\n}`;
+}
+
+/** a, b, …, z, aa, ab, … */
+function letterSuffix(n: number): string {
+  let s = '';
+  for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(97 + ((n - 1) % 26)) + s;
+  return s;
+}
+
+/** BibTeX for a whole list; repeated keys get a, b, … suffixes so every key is unique. */
+export function toBibTeXList(list: Resolved[]): string {
+  const keys = list.map(citeKey);
+  const total = new Map<string, number>();
+  for (const k of keys) total.set(k, (total.get(k) || 0) + 1);
+  const used = new Map<string, number>();
+  return list.map((r, i) => {
+    const k = keys[i];
+    if (total.get(k)! < 2) return toBibTeX(r, k);
+    const n = used.get(k) || 0;
+    used.set(k, n + 1);
+    return toBibTeX(r, `${k}${letterSuffix(n)}`);
+  }).join('\n\n');
 }
 
 export function toRIS(r: Resolved): string {

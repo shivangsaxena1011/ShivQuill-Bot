@@ -85,9 +85,6 @@ app.use(compression({
   }
 }));
 
-// 3. Body Parser with Generous Limit for Document Processing (10mb)
-app.use(express.json({ limit: '10mb' }));
-
 // 4. Rate Limiting
 // General limit for all API traffic (includes cheap GETs such as task polling)
 const apiLimiter = rateLimit({
@@ -111,10 +108,16 @@ const aiLimiter = rateLimit({
 // except job cancellation, which must always be allowed.
 const AI_PREFIXES = ['/api/paraphrase', '/api/grammar', '/api/humanize', '/api/summarize', '/api/translate', '/api/chat', '/api/suggestions', '/api/tone'];
 app.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.method !== 'POST' || req.path.includes('/cancel')) return next();
-  if (AI_PREFIXES.some(p => req.path === p || req.path.startsWith(`${p}/`))) return aiLimiter(req, res, next);
+  // Express routing is case-insensitive, so the match must be too (/API/Paraphrase reaches the same router)
+  const reqPath = req.path.toLowerCase();
+  if (req.method !== 'POST' || reqPath.includes('/cancel')) return next();
+  if (AI_PREFIXES.some(p => reqPath === p || reqPath.startsWith(`${p}/`))) return aiLimiter(req, res, next);
   return next();
 });
+
+// Body parser (10mb for document processing). Registered after the rate limiters so rejected
+// clients do not make the server buffer and parse large bodies first.
+app.use(express.json({ limit: '10mb' }));
 
 // 4b. Model allowlist: clients may not select arbitrary (e.g. expensive) provider models
 app.use('/api/', (req: Request, res: Response, next: NextFunction) => {
@@ -175,6 +178,11 @@ app.use(express.static(frontendDistPath, {
     }
   }
 }));
+
+// Unknown API routes get a JSON 404 instead of Express's HTML page
+app.use('/api', (req: Request, res: Response) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
+});
 
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
   if (req.path.startsWith('/api')) {

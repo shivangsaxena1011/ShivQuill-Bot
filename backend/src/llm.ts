@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { config } from './config.js';
+import { config, GROQ_FALLBACK_MODEL } from './config.js';
 
 let openaiClient: OpenAI | null = null;
 
@@ -75,6 +75,11 @@ function getClient(): OpenAI {
       throw new Error(`Unsupported AI Provider: ${config.requestType}`);
   }
 
+  // Without a base URL the SDK silently targets api.openai.com, which would send a custom key to OpenAI
+  if (config.requestType === 'CUSTOM' && !baseUrl) {
+    throw new Error('CUSTOM provider selected but CUSTOM_API_BASE_URL is not configured.');
+  }
+
   if (!apiKey && config.requestType !== 'CUSTOM') {
     throw new Error(
       `AI Provider '${config.requestType}' is selected but no API key is configured. ` +
@@ -101,6 +106,36 @@ export function isReasoningModel(model: string): boolean {
   return /(^|\/)gpt-oss-/i.test(model);
 }
 
+/** Groq-hosted models that would otherwise put `<think>...</think>` reasoning inside the content. */
+function emitsThinkTags(model: string): boolean {
+  return /qwen3|qwq|deepseek-r1/i.test(model);
+}
+
+/** Thrown when the provider stopped before finishing the answer (token limit or content filter). */
+export class IncompleteCompletionError extends Error {
+  constructor(public readonly finishReason: string) {
+    super(
+      finishReason === 'length'
+        ? 'The AI response was cut off because it was too long. Try a shorter selection.'
+        : `The AI provider stopped the response early (${finishReason}).`
+    );
+    this.name = 'IncompleteCompletionError';
+  }
+}
+
+export interface CompletionOptions {
+  /**
+   * Ask the provider for a strict JSON object (OpenAI-compatible `response_format: json_object`).
+   * The caller must still parse defensively; see jsonExtract.ts.
+   */
+  json?: boolean;
+}
+
+/** Providers known to accept `response_format: { type: 'json_object' }`. */
+function supportsJsonMode(): boolean {
+  return config.requestType === 'GROQ' || config.requestType === 'OPENAI' || config.requestType === 'OPENROUTER';
+}
+
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -112,9 +147,10 @@ export async function executeLlmCompletion(
   modelOverride?: string,
   temperature = 0.3,
   abortSignal?: AbortSignal,
-  onToken?: (delta: string) => void
+  onToken?: (delta: string) => void,
+  options: CompletionOptions = {}
 ): Promise<string> {
-  return executeChatCompletion(systemPrompt, [{ role: 'user', content: userPrompt }], modelOverride, temperature, abortSignal, onToken);
+  return executeChatCompletion(systemPrompt, [{ role: 'user', content: userPrompt }], modelOverride, temperature, abortSignal, onToken, options);
 }
 
 /** Emits text in small word groups (used to simulate streaming in MOCK mode). */
@@ -133,7 +169,8 @@ export async function executeChatCompletion(
   temperature = 0.3,
   abortSignal?: AbortSignal,
   /** When provided, the completion is streamed and each text delta is passed here as it arrives */
-  onToken?: (delta: string) => void
+  onToken?: (delta: string) => void,
+  options: CompletionOptions = {}
 ): Promise<string> {
   const lastUser = [...conversation].reverse().find(m => m.role === 'user');
   const userPrompt = lastUser?.content ?? '';
@@ -185,18 +222,27 @@ export async function executeChatCompletion(
   // Reasoning models (e.g. openai/gpt-oss-*) spend output tokens on hidden reasoning before
   // the answer. Keep reasoning light and leave a generous output budget so the visible answer
   // is not starved, which otherwise surfaces as an empty completion.
-  const reasoningParams = isReasoningModel(model)
-    ? { reasoning_effort: 'low' as const, max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
+  const reasoningParams: Record<string, unknown> = isReasoningModel(model)
+    ? { reasoning_effort: 'low', max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
+    : config.requestType === 'GROQ' && emitsThinkTags(model)
+      ? { reasoning_format: 'hidden' }
+      : {};
+  const formatParams = options.json && supportsJsonMode()
+    ? { response_format: { type: 'json_object' as const } }
     : {};
+
+  let finishReason: string | null | undefined;
 
   const requestOnce = async (): Promise<string> => {
     let text = '';
+    finishReason = undefined;
     if (onToken) {
       const stream = await client.chat.completions.create(
-        { model, temperature, messages, stream: true, ...reasoningParams },
+        { model, temperature, messages, stream: true, ...reasoningParams, ...formatParams },
         { signal: abortSignal }
       );
       for await (const part of stream) {
+        if (part.choices[0]?.finish_reason) finishReason = part.choices[0].finish_reason;
         const delta = part.choices[0]?.delta?.content || '';
         if (delta) {
           text += delta;
@@ -205,29 +251,51 @@ export async function executeChatCompletion(
       }
     } else {
       const response = await client.chat.completions.create(
-        { model, temperature, messages, ...reasoningParams },
+        { model, temperature, messages, ...reasoningParams, ...formatParams },
         { signal: abortSignal }
       );
       text = response.choices[0]?.message?.content || '';
+      finishReason = response.choices[0]?.finish_reason;
     }
     return text;
   };
 
   try {
-    let content = await requestOnce();
+    let content: string;
+    try {
+      content = await requestOnce();
+    } catch (err: any) {
+      // In JSON mode Groq rejects output that is not strictly valid JSON (400 json_validate_failed)
+      // but returns the generation itself; hand it to the caller's tolerant parser instead of failing.
+      const failed = err?.error?.failed_generation ?? err?.error?.error?.failed_generation;
+      if (options.json && err?.status === 400 && typeof failed === 'string' && failed.trim()) {
+        console.warn(`[ShivQuill LLM] '${model}' produced invalid strict JSON; using its raw generation.`);
+        content = failed;
+      } else {
+        throw err;
+      }
+    }
     // An empty answer emitted nothing to the stream, so one retry is safe and invisible to the user.
     if (!content.trim() && !abortSignal?.aborted) {
       console.warn(`[ShivQuill LLM] Empty completion from '${model}', retrying once...`);
       content = await requestOnce();
     }
 
-    // Strip quotation wraps if mistakenly returned
-    content = content.trim();
-    if (content.startsWith('"') && content.endsWith('"') && (content.match(/"/g) || []).length === 2) {
+    // A cut-off answer would silently drop the end of a chunk, so it must not pass as success
+    if (finishReason === 'length' || finishReason === 'content_filter') {
+      throw new IncompleteCompletionError(finishReason);
+    }
+
+    content = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    // Strip quotation wraps the model added, but keep them when the input itself was a quotation
+    const inputQuoted = /^\s*["“].*["”]\s*$/s.test(userPrompt);
+    if (!options.json && !inputQuoted && content.startsWith('"') && content.endsWith('"') && (content.match(/"/g) || []).length === 2) {
       content = content.slice(1, -1);
     }
 
     if (!content) {
+      // Already retried once above; another retry by the caller would only multiply calls
       emptyCompletion = true;
       throw new Error('AI Provider returned an empty completion response.');
     }
@@ -240,16 +308,21 @@ export async function executeChatCompletion(
       throw abortErr;
     }
 
-    // Automatic fallback for Groq when 70B model access is unavailable on the account
+    if (error instanceof IncompleteCompletionError) {
+      console.warn(`[ShivQuill LLM] '${model}' stopped early: finish_reason=${error.finishReason}`);
+      throw new ProviderError(error.message, { retryable: false });
+    }
+
+    // Automatic fallback for Groq when the configured model is unavailable (e.g. retired, 404)
     if (
       config.requestType === 'GROQ' &&
-      model !== 'openai/gpt-oss-120b' &&
+      model !== GROQ_FALLBACK_MODEL &&
       (error?.status === 404 || String(error?.message).includes('does not exist or you do not have access'))
     ) {
       console.warn(
-        `[ShivQuill LLM] Groq model '${model}' is unavailable (404, possibly retired). Falling back to 'openai/gpt-oss-120b'...`
+        `[ShivQuill LLM] Groq model '${model}' is unavailable (404, possibly retired). Falling back to '${GROQ_FALLBACK_MODEL}'...`
       );
-      return executeChatCompletion(systemPrompt, conversation, 'openai/gpt-oss-120b', temperature, abortSignal, onToken);
+      return executeChatCompletion(systemPrompt, conversation, GROQ_FALLBACK_MODEL, temperature, abortSignal, onToken, options);
     }
 
     console.error(`[ShivQuill LLM] Error calling provider ${config.requestType}:`, error.message || error);

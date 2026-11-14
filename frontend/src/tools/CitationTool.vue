@@ -4,7 +4,7 @@
       <form class="card card-pad stack" @submit.prevent="run">
         <div class="spread">
           <div class="tabs" role="tablist" aria-label="Citation style">
-            <button v-for="s in styles" :key="s" type="button" class="tab" :class="{ active: style === s }" @click="style = s">{{ s }}</button>
+            <button v-for="s in styles" :key="s" type="button" class="tab" role="tab" :aria-selected="style === s" :class="{ active: style === s }" @click="style = s">{{ s }}</button>
           </div>
           <select v-model="form.sourceType" class="select" style="width: 150px" aria-label="Source type">
             <option value="journal">Journal article</option>
@@ -45,7 +45,7 @@
         <template v-if="result">
           <div class="row-wrap">
             <span class="badge" :class="result.isVerified ? 'ok' : ''">{{ originLabel }}</span>
-            <span class="badge brand">{{ style }}</span>
+            <span class="badge brand">{{ resultStyle }}</span>
           </div>
           <div>
             <div class="spread"><span class="pane-title">Reference</span>
@@ -83,7 +83,7 @@
         <div class="row"><BookMarked :size="18" /><strong>My bibliography</strong><span class="badge">{{ bibliography.length }}</span></div>
         <div v-if="bibliography.length" class="row-wrap">
           <button class="btn btn-ghost btn-sm" type="button" @click="copyText(sorted.map(b => stripItalics(b.entry)).join('\n\n'))"><Copy /> Copy all</button>
-          <ExportMenu :text="sorted.map(b => b.entry).join('\n\n')" title="Bibliography" />
+          <ExportMenu :text="sorted.map(b => b.entry).join('\n\n')" title="Bibliography" italics />
           <button class="btn btn-ghost btn-sm" type="button" @click="downloadAs('bib')">.bib</button>
           <button class="btn btn-ghost btn-sm" type="button" @click="downloadAs('ris')">.ris</button>
           <button class="btn btn-ghost btn-sm" type="button" @click="clearBibliography">Clear</button>
@@ -113,7 +113,7 @@ import { api, type CitationParams, type CitationResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { copyText, persistedJson, showToast } from '../store';
 import { italicParts, stripItalics } from '../lib/text';
-import { sortBibliography, toBibTeX, toRIS, type BibliographyItem } from '../lib/citationExport';
+import { sortBibliography, toBibTeX, toBibTeXList, toRIS, type BibliographyItem } from '../lib/citationExport';
 
 const styles = ['APA', 'MLA', 'Chicago', 'Harvard'] as const;
 const style = ref<CitationParams['style']>('APA');
@@ -126,6 +126,8 @@ const blank = () => ({
 });
 const form = reactive(blank());
 const result = ref<CitationResult | null>(null);
+/** The style the current result was formatted in (the selected style may have changed since) */
+const resultStyle = ref<CitationParams['style']>('APA');
 const req = useRequest();
 const bibliography = persistedJson<BibliographyItem[]>('bibliography', []);
 const sorted = computed(() => sortBibliography(bibliography.value));
@@ -142,8 +144,9 @@ function reset() {
 }
 
 async function run() {
+  const requested = style.value;
   const r = await req.run(signal => api.citation({
-    style: style.value,
+    style: requested,
     sourceType: form.sourceType,
     doi: form.doi.trim() || undefined,
     isbn: form.isbn.trim() || undefined,
@@ -159,6 +162,7 @@ async function run() {
   }, { signal }));
   if (!r) return;
   result.value = r;
+  resultStyle.value = requested;
   // Fill the form from verified metadata, field by field (never cross-wired)
   if (r.isVerified) {
     const m = r.resolved;
@@ -193,7 +197,7 @@ function addToBibliography() {
   }
   bibliography.value = [...bibliography.value, {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    style: style.value,
+    style: resultStyle.value,
     entry,
     inText: result.value.inTextCitation,
     resolved: result.value.resolved,
@@ -211,7 +215,7 @@ function clearBibliography() {
 }
 
 function downloadAs(kind: 'bib' | 'ris') {
-  const text = sorted.value.map(b => (kind === 'bib' ? toBibTeX(b.resolved) : toRIS(b.resolved))).join('\n\n');
+  const text = kind === 'bib' ? toBibTeXList(sorted.value.map(b => b.resolved)) : sorted.value.map(b => toRIS(b.resolved)).join('\n\n');
   const blob = new Blob([text], { type: kind === 'bib' ? 'application/x-bibtex' : 'application/x-research-info-systems' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

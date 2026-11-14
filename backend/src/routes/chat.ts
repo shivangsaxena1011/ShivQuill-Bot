@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { executeChatCompletion } from '../llm.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+import { toClientError } from '../httpErrors.js';
 
 
 export const chatRouter = Router();
@@ -12,12 +13,16 @@ const chatSchema = z.object({
   messages: z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1).max(20000)
+      // Assistant turns may be empty (e.g. an aborted reply); they are dropped before sending
+      content: z.string().max(20000)
     })
   )
-    .min(1)
+    .min(1, 'Send at least one message')
     .max(40, 'Conversation too long; start a new chat')
-    .refine(msgs => msgs[msgs.length - 1].role === 'user', 'The last message must be from the user'),
+    .refine(
+      msgs => msgs.length > 0 && msgs[msgs.length - 1].role === 'user' && msgs[msgs.length - 1].content.trim().length > 0,
+      'The last message must be a non-empty message from the user'
+    ),
   documentContext: z.string().max(100000).optional(),
   model: z.string().optional()
 });
@@ -28,6 +33,8 @@ const chatSchema = z.object({
 function sanitizeContext(rawContext: string): string {
   return rawContext
     .replace(/---+\s*(?:START|END|CURRENT)?\s*(?:DOCUMENT)?\s*CONTEXT\s*---+/gi, '[delimiter_neutralized]')
+    // The delimiter this route actually uses; a document must not be able to close the block early
+    .replace(/=+\s*(?:END\s+)?ATTACHED\s+DOCUMENT\s+CONTEXT[^=\n]*=+/gi, '[delimiter_neutralized]')
     .replace(/<\|im_start\|>|<\|im_end\|>/gi, '');
 }
 
@@ -51,10 +58,11 @@ Be concise, practical, and provide concrete examples when suggesting alternative
     const MAX_HISTORY_CHARS = 30000;
     const conversation: typeof messages = [];
     let used = 0;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      used += messages[i].content.length;
+    const turns = messages.filter(m => m.content.trim().length > 0);
+    for (let i = turns.length - 1; i >= 0; i--) {
+      used += turns[i].content.length;
       if (used > MAX_HISTORY_CHARS && conversation.length > 0) break;
-      conversation.unshift(messages[i]);
+      conversation.unshift(turns[i]);
     }
     // Providers expect the first non-system turn to be from the user
     while (conversation.length > 1 && conversation[0].role !== 'user') conversation.shift();
@@ -73,6 +81,7 @@ Be concise, practical, and provide concrete examples when suggesting alternative
       return fail(res, stream, 400, error.errors[0].message);
     }
     console.error('Chat error:', error.message || error);
-    return fail(res, stream, 500, error.message || 'Chat completion failed');
+    const e = toClientError(error, 'Chat completion failed');
+    return fail(res, stream, e.status, e.message);
   }
 });

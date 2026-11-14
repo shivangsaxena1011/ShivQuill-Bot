@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { ShieldCheck } from 'lucide-vue-next';
 import StatusBits from '../components/StatusBits.vue';
 import { api, type PlagiarismResult } from '../api';
@@ -66,6 +66,8 @@ const input = useToolInput('plagiarism', sample);
 const result = ref<PlagiarismResult | null>(null);
 const checkedText = ref('');
 const req = useRequest();
+// A result only describes the text it was run on (e.g. text loaded from the Library replaces it)
+watch(input, () => (result.value = null));
 
 const highlighted = computed(() => {
   if (!result.value) return [];

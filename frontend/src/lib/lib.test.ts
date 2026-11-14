@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { applyAllEdits, applyEdit, highlightRanges, italicParts, locateEdit, stripItalics, wordCount } from './text';
 import { analyzeReadability, countSyllables, splitSentences } from './readability';
-import { sortBibliography, toBibTeX, toRIS } from './citationExport';
+import { sortBibliography, toBibTeX, toBibTeXList, toRIS } from './citationExport';
+import { parts, plainText } from './files';
 
 describe('text helpers', () => {
   it('counts words without splitting into arrays', () => {
@@ -105,8 +106,24 @@ describe('citation export', () => {
     expect(ris.trim().endsWith('ER  -')).toBe(true);
   });
 
+  it('gives repeated BibTeX keys a, b, … suffixes within one export', () => {
+    const other = { ...resolved, title: 'A different paper', authors: [{ given: 'Ada', family: 'Lovelace' }] };
+    const keys = toBibTeXList([resolved, other, resolved, resolved]).match(/^@\w+\{[^,]+/gm)!.map(k => k.split('{')[1]);
+    expect(keys).toEqual(['he2016deepa', 'lovelace2016different', 'he2016deepb', 'he2016deepc']);
+    expect(toBibTeXList([resolved])).toBe(toBibTeX(resolved));
+  });
+
   it('sorts references alphabetically ignoring italics', () => {
     const items = ['*Zeta* book', 'Alpha, A.', 'beta, B.'].map((entry, i) => ({ id: String(i), style: 'APA', entry, inText: '', resolved, addedAt: i }));
     expect(sortBibliography(items).map(i => i.entry)).toEqual(['Alpha, A.', 'beta, B.', '*Zeta* book']);
+  });
+});
+
+describe('export italics', () => {
+  it('keeps ordinary asterisks unless italics are requested', () => {
+    expect(plainText('2 * 3 * 4 and *note*')).toBe('2 * 3 * 4 and *note*');
+    expect(parts('a *b* c')).toEqual([{ text: 'a *b* c', italic: false }]);
+    expect(plainText('*Nature*, 12', true)).toBe('Nature, 12');
+    expect(parts('In *Nature*.', true)).toEqual([{ text: 'In ', italic: false }, { text: 'Nature', italic: true }, { text: '.', italic: false }]);
   });
 });

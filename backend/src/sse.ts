@@ -28,18 +28,18 @@ export function openSse(res: Response): SseChannel {
   res.flushHeaders();
 
   const heartbeat = setInterval(() => {
-    if (!res.writableEnded) res.write(': ping\n\n');
+    if (!res.writableEnded && !res.destroyed) res.write(': ping\n\n');
   }, 15000);
   res.on('close', () => clearInterval(heartbeat));
 
   return {
     send(event, data) {
-      if (res.writableEnded) return;
+      if (res.writableEnded || res.destroyed) return;
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     },
     end() {
       clearInterval(heartbeat);
-      if (!res.writableEnded) res.end();
+      if (!res.writableEnded && !res.destroyed) res.end();
     }
   };
 }

@@ -1,5 +1,5 @@
 <template>
-  <div class="card pane" :class="{ 'drop-active': dragging }" @dragover.prevent="dragging = true" @dragleave.self="dragging = false" @drop.prevent="onDrop">
+  <div class="card pane" :class="{ 'drop-active': dragging }" @dragover="onDragOver" @dragleave.self="dragging = false" @drop="onDrop">
     <div class="pane-head">
       <span class="pane-title">{{ title }}</span>
       <div class="row">
@@ -172,8 +172,19 @@ function onPick(e: Event) {
   if (file) load(file);
 }
 
+// Only file drops are ours; dragging text within/into the editor keeps the browser's behaviour
+const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+
+function onDragOver(e: DragEvent) {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragging.value = true;
+}
+
 function onDrop(e: DragEvent) {
   dragging.value = false;
+  if (!hasFiles(e)) return;
+  e.preventDefault();
   const file = e.dataTransfer?.files?.[0];
   if (file) load(file);
 }
@@ -183,8 +194,12 @@ async function save() {
   const suggested = props.modelValue.trim().split('\n')[0].slice(0, 60);
   const title = window.prompt('Save to Library as:', suggested);
   if (title === null) return;
-  await saveDocument({ title: title || suggested, text: props.modelValue, tool: props.tool });
-  showToast('Saved to Library');
+  try {
+    await saveDocument({ title: title || suggested, text: props.modelValue, tool: props.tool });
+    showToast('Saved to Library');
+  } catch {
+    showToast('Could not save — storage may be full or blocked in this browser');
+  }
 }
 
 // ---------------- Selection helpers (used by tools) ----------------

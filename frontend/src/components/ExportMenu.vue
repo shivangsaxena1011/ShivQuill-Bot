@@ -17,7 +17,7 @@ import { Download } from 'lucide-vue-next';
 import { exportText, type ExportFormat } from '../lib/files';
 import { showToast } from '../store';
 
-const props = defineProps<{ text: string; title?: string }>();
+const props = defineProps<{ text: string; title?: string; /** Text uses "*italic*" markers (citations) */ italics?: boolean }>();
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 
@@ -31,7 +31,7 @@ const formats: { id: ExportFormat; label: string; ext: string }[] = [
 async function run(format: ExportFormat) {
   open.value = false;
   try {
-    await exportText(props.text, format, props.title || 'ShivQuill document');
+    await exportText(props.text, format, props.title || 'ShivQuill document', { italics: props.italics });
   } catch {
     showToast('Export failed — please try another format');
   }

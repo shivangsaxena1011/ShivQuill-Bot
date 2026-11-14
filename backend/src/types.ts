@@ -245,6 +245,7 @@ export interface WritingSuggestionsResponse {
     vocabularyCount: number;
     toneCount: number;
     restructuringCount: number;
+    academicCount: number;
   };
 }
 

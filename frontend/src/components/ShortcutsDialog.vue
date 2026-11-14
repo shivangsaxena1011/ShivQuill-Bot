@@ -1,10 +1,10 @@
 <template>
   <Transition name="fade">
     <div v-if="workspace.shortcutsOpen" class="dialog-backdrop" @click.self="workspace.shortcutsOpen = false">
-      <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+      <div ref="dialog" class="dialog card" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" tabindex="-1">
         <div class="spread">
           <h2 id="shortcuts-title" style="font-size: 17px">Keyboard shortcuts</h2>
-          <button class="btn btn-ghost btn-sm btn-icon" type="button" aria-label="Close" @click="workspace.shortcutsOpen = false"><X /></button>
+          <button ref="closeBtn" class="btn btn-ghost btn-sm btn-icon" type="button" aria-label="Close" @click="workspace.shortcutsOpen = false"><X /></button>
         </div>
         <table class="shortcut-table">
           <tbody>
@@ -24,9 +24,24 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue';
 import { X } from 'lucide-vue-next';
 import { workspace } from '../store';
 
 defineProps<{ tools: { id: string; name: string }[] }>();
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
+
+// Move focus into the dialog on open and restore it on close
+const dialog = ref<HTMLElement | null>(null);
+const closeBtn = ref<HTMLButtonElement | null>(null);
+let returnFocus: HTMLElement | null = null;
+watch(() => workspace.shortcutsOpen, open => {
+  if (open) {
+    returnFocus = document.activeElement as HTMLElement | null;
+    nextTick(() => (closeBtn.value || dialog.value)?.focus());
+  } else {
+    returnFocus?.focus?.();
+    returnFocus = null;
+  }
+});
 </script>
