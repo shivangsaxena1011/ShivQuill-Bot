@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { CircleAlert, ScanSearch } from 'lucide-vue-next';
 import StatusBits from '../components/StatusBits.vue';
 import { api, type DetectorResult } from '../api';
@@ -75,6 +75,8 @@ const sample = 'Furthermore, it is important to remember that utilizing advanced
 const input = useToolInput('detector', sample);
 const result = ref<DetectorResult | null>(null);
 const req = useRequest();
+// A result only describes the text it was run on (e.g. text loaded from the Library replaces it)
+watch(input, () => (result.value = null));
 
 // Rendering thousands of sentence spans is slow; cap the visual list
 const visibleSentences = computed(() => (result.value?.sentences || []).slice(0, 1500));

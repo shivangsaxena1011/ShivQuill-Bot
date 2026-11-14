@@ -124,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
+import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import {
   BookOpenCheck, CircleAlert, Download, FileText, Gauge, Keyboard, Languages, Library, Lightbulb, LoaderCircle,
   MessageSquare, Moon, PenLine, Quote, RefreshCw, ScanSearch, ShieldCheck, Sparkles, SpellCheck, Sun
@@ -134,18 +134,39 @@ import ChatDrawer from './components/ChatDrawer.vue';
 import { workspace, toast, type ToolId } from './store';
 import { useServerStatus } from './composables/useServerStatus';
 
+// After a deploy, an open tab may ask for old chunk hashes that no longer exist: reload once
+// (at most every 10 s, so a real outage can't cause a reload loop) to pick up the new build.
+window.addEventListener('vite:preloadError', e => {
+  try {
+    const last = Number(sessionStorage.getItem('sq:chunk-reload') || 0);
+    if (Date.now() - last < 10_000) return; // let the error surface instead
+    sessionStorage.setItem('sq:chunk-reload', String(Date.now()));
+  } catch { /* ignore */ }
+  e.preventDefault();
+  window.location.reload();
+});
+
+// Shown if a tool's code can't be loaded (offline, or a stale build)
+const ToolLoadError: Component = {
+  render: () => h('div', { class: 'alert bad small', role: 'alert' }, [
+    h('span', 'This tool could not be loaded — the app may have been updated or you may be offline.'),
+    h('button', { class: 'btn btn-sm', type: 'button', style: 'margin-left: auto', onClick: () => window.location.reload() }, 'Reload')
+  ])
+};
+const lazy = (loader: () => Promise<any>) => defineAsyncComponent({ loader, errorComponent: ToolLoadError });
+
 // Each tool is its own small chunk, loaded on first use → fast first paint
-const ParaphraseTool = defineAsyncComponent(() => import('./tools/ParaphraseTool.vue'));
-const ReviewTool = defineAsyncComponent(() => import('./tools/ReviewTool.vue'));
-const HumanizeTool = defineAsyncComponent(() => import('./tools/HumanizeTool.vue'));
-const SummarizeTool = defineAsyncComponent(() => import('./tools/SummarizeTool.vue'));
-const TranslateTool = defineAsyncComponent(() => import('./tools/TranslateTool.vue'));
-const DetectorTool = defineAsyncComponent(() => import('./tools/DetectorTool.vue'));
-const PlagiarismTool = defineAsyncComponent(() => import('./tools/PlagiarismTool.vue'));
-const CitationTool = defineAsyncComponent(() => import('./tools/CitationTool.vue'));
-const ToneTool = defineAsyncComponent(() => import('./tools/ToneTool.vue'));
-const ReadabilityTool = defineAsyncComponent(() => import('./tools/ReadabilityTool.vue'));
-const LibraryTool = defineAsyncComponent(() => import('./tools/LibraryTool.vue'));
+const ParaphraseTool = lazy(() => import('./tools/ParaphraseTool.vue'));
+const ReviewTool = lazy(() => import('./tools/ReviewTool.vue'));
+const HumanizeTool = lazy(() => import('./tools/HumanizeTool.vue'));
+const SummarizeTool = lazy(() => import('./tools/SummarizeTool.vue'));
+const TranslateTool = lazy(() => import('./tools/TranslateTool.vue'));
+const DetectorTool = lazy(() => import('./tools/DetectorTool.vue'));
+const PlagiarismTool = lazy(() => import('./tools/PlagiarismTool.vue'));
+const CitationTool = lazy(() => import('./tools/CitationTool.vue'));
+const ToneTool = lazy(() => import('./tools/ToneTool.vue'));
+const ReadabilityTool = lazy(() => import('./tools/ReadabilityTool.vue'));
+const LibraryTool = lazy(() => import('./tools/LibraryTool.vue'));
 
 interface ToolDef {
   id: ToolId;
@@ -206,7 +227,7 @@ onMounted(() => {
   } catch { /* ignore */ }
   // Warm up the most-used tool chunks in idle time so switching is instant
   const idle = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1500));
-  idle(() => { import('./tools/ReviewTool.vue'); import('./tools/SummarizeTool.vue'); });
+  idle(() => { import('./tools/ReviewTool.vue').catch(() => undefined); import('./tools/SummarizeTool.vue').catch(() => undefined); });
 });
 
 // ---------------- Keyboard shortcuts ----------------

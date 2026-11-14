@@ -14,7 +14,11 @@
           class="hl-synonym"
           :class="{ clickable: interactive && options(span).length > 1 }"
           :title="span.original ? `Was: ${span.original}${interactive && options(span).length > 1 ? ' — click for another word' : ''}` : undefined"
+          :role="interactive && options(span).length > 1 ? 'button' : undefined"
+          :tabindex="interactive && options(span).length > 1 ? 0 : undefined"
           @click="interactive && cycle(i)"
+          @keydown.enter.prevent="interactive && cycle(i)"
+          @keydown.space.prevent="interactive && cycle(i)"
         >{{ span.value }}</span>
         <span v-else-if="span.type === 'added'" class="hl-added">{{ span.value }}</span>
         <span v-else-if="span.type === 'removed' && showRemoved" class="hl-removed">{{ span.value }}</span>
@@ -34,7 +38,7 @@ const props = withDefaults(defineProps<{
   showRemoved?: boolean;
 }>(), { interactive: false, showRemoved: false });
 
-const emit = defineEmits<{ 'update:text': [text: string] }>();
+const emit = defineEmits<{ 'update:text': [text: string]; 'update:spans': [spans: DiffSpan[]] }>();
 
 const MAX_SPANS = 4000;
 const spans = ref<DiffSpan[]>([]);
@@ -63,6 +67,7 @@ function cycle(index: number) {
   const pos = opts.findIndex(o => o.toLowerCase() === current.toLowerCase());
   const next = matchCase(opts[(pos + 1) % opts.length], current);
   span.value = `${m[1]}${next}${m[3]}`;
+  emit('update:spans', spans.value.map(s => ({ ...s })));
   emit('update:text', plainText.value);
 }
 </script>

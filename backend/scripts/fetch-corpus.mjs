@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = resolve(__dirname, '../corpus/arxiv-abstracts.json');
 
-const API = 'http://export.arxiv.org/api/query';
+const API = 'https://export.arxiv.org/api/query';
 const USER_AGENT = 'ShivQuill-corpus-builder/1.0';
 const DELAY_MS = 3500;
 const PER_CATEGORY = 28;
@@ -99,7 +99,7 @@ async function fetchCategory(cat) {
   const url = `${API}?${params.toString()}`;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(30000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return parseEntries(await res.text());
     } catch (err) {

@@ -105,7 +105,7 @@ function inText(style: CitationStyle, src: CitationSource): string {
   const a = src.authors;
   const shortTitle = src.title.length > 40 ? `${src.title.slice(0, 40).trim()}…` : src.title;
   const lead = a.length === 0
-    ? (style === 'MLA' ? `"${shortTitle}"` : `"${shortTitle}"`)
+    ? `"${shortTitle}"`
     : a.length === 1
       ? a[0].family
       : a.length === 2
@@ -126,25 +126,31 @@ function inText(style: CitationStyle, src: CitationSource): string {
 // ---------------- Bibliography ----------------
 
 function apa(src: CitationSource): string {
-  const who = src.authors.length ? `${end(apaAuthors(src.authors))} ` : '';
-  const head = src.authors.length ? `${who}(${src.year}). ` : '';
   const url = link(src);
-  let body: string;
+  let title: string;
+  let source = '';
 
   if (src.sourceType === 'journal') {
-    const container = src.containerTitle ? ` *${src.containerTitle}*` : '';
-    const vol = src.volume ? `, *${src.volume}*` : '';
-    const iss = src.issue ? `(${src.issue})` : '';
-    const pages = src.pages ? `, ${src.pages}` : '';
-    body = `${end(src.title)}${container}${vol}${iss}${pages}${container || vol ? '.' : ''}`;
+    title = end(src.title);
+    if (src.containerTitle) {
+      const vol = src.volume ? `, *${src.volume}*` : '';
+      const iss = src.issue ? `(${src.issue})` : '';
+      const pages = src.pages ? `, ${src.pages}` : '';
+      source = `*${src.containerTitle}*${vol}${iss}${pages}.`;
+    }
   } else if (src.sourceType === 'book') {
-    body = `*${end(src.title)}*${src.publisher ? ` ${end(src.publisher)}` : ''}`;
+    title = `*${end(src.title)}*`;
+    source = src.publisher ? end(src.publisher) : '';
   } else {
-    body = `*${end(src.title)}*${src.containerTitle || src.publisher ? ` ${end(src.containerTitle || src.publisher!)}` : ''}`;
+    title = `*${end(src.title)}*`;
+    source = src.containerTitle || src.publisher ? end(src.containerTitle || src.publisher!) : '';
   }
 
-  const lead = src.authors.length ? head : `${body} (${src.year}). `;
-  return `${lead}${src.authors.length ? body : ''}${url ? ` ${url}` : ''}`.replace(/\s+/g, ' ').trim();
+  // APA: "Author. (Year). Title. Source." — with no author the title moves into the author position
+  const parts = src.authors.length
+    ? [end(apaAuthors(src.authors)), `(${src.year}).`, title, source]
+    : [title, `(${src.year}).`, source];
+  return [...parts, url].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 }
 
 function mla(src: CitationSource): string {

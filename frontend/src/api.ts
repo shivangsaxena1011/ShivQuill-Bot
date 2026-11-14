@@ -194,17 +194,24 @@ export interface StreamHandlers {
  * (or a proxy) didn't stream.
  */
 export async function streamPost<T>(path: string, body: unknown, h: StreamHandlers = {}): Promise<T> {
-  const res = await fetch(`/api${path}?stream=1`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    body: JSON.stringify(body),
-    signal: h.signal
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}?stream=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      signal: h.signal
+    });
+  } catch (err) {
+    // fetch rejects with a TypeError for any network failure ("Failed to fetch", Safari: "Load failed")
+    if (err instanceof TypeError) throw new NetworkError();
+    throw err;
+  }
 
   const type = res.headers.get('content-type') || '';
   if (!type.includes('text/event-stream')) {
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new HttpError(res.status, data?.error || data?.message || `Request failed (${res.status}).`);
+    if (!res.ok) throw new HttpError(res.status, backendMessage(res.status, data) || `Request failed (${res.status}).`);
     return data as T;
   }
 
@@ -213,30 +220,63 @@ export async function streamPost<T>(path: string, body: unknown, h: StreamHandle
   let buffer = '';
   let result: T | undefined;
 
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep: number;
-    while ((sep = buffer.indexOf('\n\n')) !== -1) {
-      const block = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      let event = 'message';
-      let data = '';
-      for (const line of block.split('\n')) {
-        if (line.startsWith('event:')) event = line.slice(6).trim();
-        else if (line.startsWith('data:')) data += line.slice(5).trim();
-      }
-      if (!data) continue; // heartbeat comment
-      const payload = JSON.parse(data);
-      if (event === 'delta') h.onDelta?.(payload.text);
-      else if (event === 'status') h.onStatus?.(payload.message);
-      else if (event === 'error') throw new HttpError(payload.status || 500, payload.error || 'Request failed.');
-      else if (event === 'done') result = payload as T;
+  const handle = (block: string) => {
+    let event = 'message';
+    let data = '';
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += line.slice(5).trim();
     }
+    if (!data) return; // heartbeat comment
+    let payload: any;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      throw new Error('The server sent a response that could not be read. Please try again.');
+    }
+    if (event === 'delta') h.onDelta?.(payload.text);
+    else if (event === 'status') h.onStatus?.(payload.message);
+    else if (event === 'error') throw new HttpError(payload.status || 500, backendMessage(payload.status, payload) || 'Request failed.');
+    else if (event === 'done') result = payload as T;
+  };
+
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const block = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        handle(block);
+      }
+    }
+    // Flush the decoder and handle a final frame that wasn't followed by a blank line
+    buffer += decoder.decode();
+    if (buffer.trim()) handle(buffer);
+  } catch (err) {
+    if (err instanceof TypeError) throw new NetworkError();
+    throw err;
+  } finally {
+    reader.cancel().catch(() => undefined);
   }
   if (result === undefined) throw new Error('The connection closed before the result arrived. Please try again.');
   return result;
+}
+
+/** On validation errors (422) the readable `message` beats the short `error` code. */
+function backendMessage(status: number | undefined, data: any): string | undefined {
+  return status === 422 ? data?.message || data?.error : data?.error || data?.message;
+}
+
+const OFFLINE_MESSAGE = 'Cannot reach the server. Check your connection — if the app was idle, it may be waking up.';
+
+export class NetworkError extends Error {
+  constructor() {
+    super(OFFLINE_MESSAGE);
+    this.name = 'NetworkError';
+  }
 }
 
 export class HttpError extends Error {
@@ -264,7 +304,7 @@ export const api = {
     streamPost<SummarizeResult>('/summarize', { text, format, length }, h),
   translate: (text: string, sourceLang: string, targetLang: string, glossary: GlossaryEntry[], h: StreamHandlers = {}) =>
     streamPost<TranslateResult>('/translate', { text, sourceLang, targetLang, glossary: glossary.length ? glossary : undefined }, h),
-  rephraseSentence: (body: { sentence: string; context?: string; mode: ParaphraseMode; count?: number; frozenWords?: string[] }, o: Opts = {}) =>
+  rephraseSentence: (body: { sentence: string; context?: string; mode: ParaphraseMode; count?: number; customInstruction?: string; frozenWords?: string[] }, o: Opts = {}) =>
     http.post<{ alternatives: string[] }>('/paraphrase/sentence', body, { signal: o.signal }).then(r => r.data),
   toneAnalyze: (text: string, o: Opts = {}) => http.post<ToneAnalysis>('/tone/analyze', { text }, { signal: o.signal }).then(r => r.data),
   toneRewrite: (text: string, tone: string, h: StreamHandlers = {}) => streamPost<ToneRewriteResult>('/tone/rewrite', { text, tone }, h),
@@ -286,16 +326,14 @@ export function errorMessage(err: unknown): string {
     if (err.status === 502 || err.status === 503) return 'The server is starting up or busy. Please try again in a moment.';
     return err.message;
   }
-  if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
-    return 'Cannot reach the server. Check your connection — if the app was idle, it may be waking up.';
-  }
+  if (err instanceof NetworkError) return OFFLINE_MESSAGE;
   const ax = err as AxiosError<any>;
   if (ax?.response) {
     const data = ax.response.data;
     if (ax.response.status === 429) return data?.error || 'Too many requests — please wait a minute and try again.';
     if (ax.response.status === 502 || ax.response.status === 503) return 'The server is starting up or busy. Please try again in a moment.';
-    return data?.error || data?.message || `Request failed (${ax.response.status}).`;
+    return backendMessage(ax.response.status, data) || `Request failed (${ax.response.status}).`;
   }
-  if (ax?.request) return 'Cannot reach the server. Check your connection — if the app was idle, it may be waking up.';
+  if (ax?.request) return OFFLINE_MESSAGE;
   return (err as Error)?.message || 'Something went wrong.';
 }

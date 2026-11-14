@@ -122,12 +122,14 @@ export function generateShingles(tokens: string[], k = 5): Set<string> {
  * Computes MinHash signature array for a set of shingles
  */
 export function computeMinHashSignature(shingles: Set<string>): number[] {
+  // Hash values lie in [0, LARGE_PRIME), so LARGE_PRIME is a safe "no value yet" sentinel
   const signature: number[] = new Array(MINHASH_NUM_HASHES).fill(LARGE_PRIME);
 
   for (const shingle of shingles) {
     const rawHash = hashString(shingle);
     for (let i = 0; i < MINHASH_NUM_HASHES; i++) {
-      const h = ((Math.imul(HASH_COEFF_A[i], rawHash) + HASH_COEFF_B[i]) % LARGE_PRIME) >>> 0;
+      // Unsigned multiply first: a negative intermediate would otherwise map outside [0, LARGE_PRIME)
+      const h = ((Math.imul(HASH_COEFF_A[i], rawHash) >>> 0) + HASH_COEFF_B[i]) % LARGE_PRIME;
       if (h < signature[i]) {
         signature[i] = h;
       }

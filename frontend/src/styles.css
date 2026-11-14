@@ -679,7 +679,8 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--brand); }
 .library-item { display: flex; flex-direction: column; gap: 8px; }
 .library-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .library-snippet { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.history-io { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.history-io { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.history-io p { overflow-wrap: anywhere; }
 
 .bib-list { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
 .bib-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 1.55; }

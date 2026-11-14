@@ -171,11 +171,23 @@ export class DocumentProcessingJob {
     }
 
     this.status = 'processing';
+    // Set when the provider rejects us in a way every remaining chunk would hit too
+    let fatalError: string | null = null;
 
     for (const chunk of this.chunks) {
       if (this.isCancelled()) {
         this.status = 'cancelled';
         throw new JobCancelledError(this.id);
+      }
+
+      if (fatalError) {
+        // Skip the doomed provider call; keep the original text like any other failed chunk
+        chunk.status = 'failed';
+        chunk.error = fatalError;
+        chunk.rewrittenText = chunk.originalText;
+        this.failedChunks++;
+        this.partialRecovery = true;
+        continue;
       }
 
       chunk.status = 'processing';
@@ -240,6 +252,11 @@ export class DocumentProcessingJob {
           }
 
           chunk.error = err.message || 'Chunk processing failed';
+          // Bad key, forbidden, or unknown model: every remaining chunk would fail the same way
+          if (typeof err.status === 'number' && [401, 403, 404].includes(err.status)) {
+            fatalError = chunk.error || 'AI provider rejected the request';
+            break;
+          }
           // Transport/HTTP errors were already retried inside the provider SDK; re-trying them here
           // would multiply attempts (and cost). Only retry errors explicitly flagged as retryable.
           if (err.retryable !== true) {
@@ -340,6 +357,10 @@ interface JobEntry {
 /**
  * In-memory manager for active document processing jobs with TTL cleanup and capacity bounds
  */
+function isTerminalStatus(status: string): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled';
+}
+
 export class DocumentJobRegistry {
   private jobs: Map<string, JobEntry> = new Map();
   private readonly maxActiveJobs: number;
@@ -373,13 +394,19 @@ export class DocumentJobRegistry {
     return this.jobs.get(id)?.job;
   }
 
+  /** Cancels an active job. Returns false when the job is unknown or already finished. */
   public cancel(id: string): boolean {
     const entry = this.jobs.get(id);
-    if (entry) {
-      entry.job.cancel();
-      return true;
-    }
-    return false;
+    if (!entry || isTerminalStatus(entry.job.status)) return false;
+    entry.job.cancel();
+    return true;
+  }
+
+  /** True when every slot is held by a job that is still running. */
+  public isFull(): boolean {
+    if (this.jobs.size < this.maxActiveJobs) return false;
+    this.prune();
+    return this.jobs.size >= this.maxActiveJobs;
   }
 
   public delete(id: string): void {
@@ -393,7 +420,7 @@ export class DocumentJobRegistry {
   public prune(): void {
     const now = Date.now();
     for (const [id, entry] of this.jobs.entries()) {
-      const isTerminal = ['completed', 'failed', 'cancelled'].includes(entry.job.status);
+      const isTerminal = isTerminalStatus(entry.job.status);
       const isExpired = now - entry.registeredAt > this.ttlMs;
       if (isTerminal || isExpired) {
         clearTimeout(entry.timer);

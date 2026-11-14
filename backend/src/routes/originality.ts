@@ -252,17 +252,17 @@ originalityRouter.post('/corpus', verifyCorpusAdminAuth, (req: Request, res: Res
 const citationSchema = z.object({
   sourceType: z.enum(['website', 'journal', 'book']).default('website'),
   style: z.enum(['APA', 'MLA', 'Chicago', 'Harvard']).default('APA'),
-  url: z.string().optional(),
-  doi: z.string().optional(),
+  url: z.string().max(2000).optional(),
+  doi: z.string().max(300).optional(),
   isbn: z.string().max(40).optional(),
-  title: z.string().optional(),
-  authors: z.array(z.string()).optional(),
-  year: z.string().optional(),
+  title: z.string().max(1000).optional(),
+  authors: z.array(z.string().max(200)).max(100).optional(),
+  year: z.string().max(20).optional(),
   publisher: z.string().max(300).optional(),
   containerTitle: z.string().max(300).optional(),
-  volume: z.string().optional(),
-  issue: z.string().optional(),
-  pages: z.string().optional()
+  volume: z.string().max(50).optional(),
+  issue: z.string().max(50).optional(),
+  pages: z.string().max(50).optional()
 });
 
 /**
@@ -285,11 +285,14 @@ async function fetchCrossrefMetadata(doiQuery: string): Promise<any | null> {
       headers: { 'User-Agent': 'ShivQuill-Academic-Citation-Engine/2.0 (mailto:support@shivquill.local)' },
       signal: controller.signal
     });
-    clearTimeout(timeout);
-
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    return data.message || null;
+    try {
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      return data.message || null;
+    } finally {
+      // The timer must also cover reading the body, not just the response headers
+      clearTimeout(timeout);
+    }
   } catch {
     return null;
   }
@@ -318,10 +321,13 @@ async function fetchOpenLibraryBook(isbn: string): Promise<any | null> {
       `https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`,
       { headers: { 'User-Agent': 'ShivQuill-Citation-Engine/2.2' }, signal: controller.signal }
     );
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    return data[`ISBN:${isbn}`] || null;
+    try {
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      return data[`ISBN:${isbn}`] || null;
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch {
     return null;
   }

@@ -2,11 +2,11 @@
   <div class="stack">
     <div class="card toolbar">
       <div class="tabs" role="tablist" aria-label="Summary format">
-        <button class="tab" :class="{ active: format === 'bullet' }" type="button" @click="format = 'bullet'">Key points</button>
-        <button class="tab" :class="{ active: format === 'paragraph' }" type="button" @click="format = 'paragraph'">Paragraph</button>
+        <button class="tab" :class="{ active: format === 'bullet' }" type="button" role="tab" :aria-selected="format === 'bullet'" @click="format = 'bullet'">Key points</button>
+        <button class="tab" :class="{ active: format === 'paragraph' }" type="button" role="tab" :aria-selected="format === 'paragraph'" @click="format = 'paragraph'">Paragraph</button>
       </div>
-      <div class="chip-row">
-        <button v-for="l in lengths" :key="l" type="button" class="chip" :class="{ active: length === l }" @click="length = l">{{ l[0].toUpperCase() + l.slice(1) }}</button>
+      <div class="chip-row" role="radiogroup" aria-label="Summary length">
+        <button v-for="l in lengths" :key="l" type="button" class="chip" role="radio" :aria-checked="length === l" :class="{ active: length === l }" @click="length = l">{{ l[0].toUpperCase() + l.slice(1) }}</button>
       </div>
     </div>
 

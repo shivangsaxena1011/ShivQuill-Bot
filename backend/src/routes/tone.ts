@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { executeLlmCompletion } from '../llm.js';
+import { completeStructured, MalformedModelResponseError, looseNumber, looseString } from '../structuredCompletion.js';
 import { getToneAnalysisPrompt, getToneRewritePrompt, TONE_TARGETS } from '../prompts.js';
 import { config } from '../config.js';
 import { splitIntoBatches, joinBatchOutputs, mapBatches } from '../batching.js';
 import { generateDiffSpansForPairs } from '../diff.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+import { toClientError } from '../httpErrors.js';
 
 export const toneRouter = Router();
 
@@ -16,13 +18,18 @@ const analyzeSchema = z.object({
 });
 
 const toneResultSchema = z.object({
-  primaryTone: z.string().min(1).max(40),
-  tones: z.array(z.object({ name: z.string().min(1).max(40), score: z.number() })).max(10),
-  formality: z.number(),
-  sentiment: z.enum(['positive', 'neutral', 'negative', 'mixed']).catch('neutral'),
-  confidence: z.number(),
-  summary: z.string().max(500)
-});
+  primaryTone: looseString(40),
+  tones: z.array(z.object({ name: looseString(40), score: looseNumber() }))
+    .catch([])
+    .transform(ts => ts.filter(t => t.name).slice(0, 10)),
+  formality: looseNumber(50),
+  sentiment: z.preprocess(
+    v => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.enum(['positive', 'neutral', 'negative', 'mixed']).catch('neutral')
+  ),
+  confidence: looseNumber(50),
+  summary: looseString(500)
+}).refine(r => r.primaryTone.length > 0 || r.tones.length > 0, 'No tone was identified');
 
 const clamp = (n: number) => Math.round(Math.min(100, Math.max(0, n)));
 
@@ -32,18 +39,12 @@ toneRouter.post('/analyze', async (req: Request, res: Response) => {
   try {
     const { text, model } = analyzeSchema.parse(req.body);
     const sample = text.length > 8000 ? `${text.slice(0, 5000)}\n…\n${text.slice(-3000)}` : text;
-    const raw = await executeLlmCompletion(getToneAnalysisPrompt(), sample, model, 0.1, signal);
-
-    let parsed: z.infer<typeof toneResultSchema>;
-    try {
-      parsed = toneResultSchema.parse(JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)));
-    } catch {
-      return res.status(422).json({ error: 'The AI returned an unexpected format. Please try again.' });
-    }
+    const parsed = await completeStructured(toneResultSchema, getToneAnalysisPrompt(), sample, model, 0.1, signal);
+    const tones = parsed.tones.map(t => ({ name: t.name, score: clamp(t.score) })).sort((a, b) => b.score - a.score);
 
     return res.json({
-      primaryTone: parsed.primaryTone,
-      tones: parsed.tones.map(t => ({ name: t.name, score: clamp(t.score) })).sort((a, b) => b.score - a.score),
+      primaryTone: parsed.primaryTone || tones[0].name,
+      tones,
       formality: clamp(parsed.formality),
       sentiment: parsed.sentiment,
       confidence: clamp(parsed.confidence),
@@ -53,8 +54,13 @@ toneRouter.post('/analyze', async (req: Request, res: Response) => {
   } catch (error: any) {
     if (signal.aborted || isAbortError(error)) return;
     if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors[0].message });
+    if (error instanceof MalformedModelResponseError) {
+      console.warn('[ShivQuill Tone] Malformed model response:', error.message);
+      return res.status(422).json({ error: 'The AI returned an unexpected format. Please try again.' });
+    }
     console.error('Tone analysis error:', error.message || error);
-    return res.status(500).json({ error: error.message || 'Tone analysis failed' });
+    const e = toClientError(error, 'Tone analysis failed');
+    return res.status(e.status).json({ error: e.message });
   }
 });
 
@@ -96,6 +102,7 @@ toneRouter.post('/rewrite', async (req: Request, res: Response) => {
     }
     if (error instanceof z.ZodError) return fail(res, stream, 400, error.errors[0].message);
     console.error('Tone rewrite error:', error.message || error);
-    return fail(res, stream, 500, error.message || 'Tone rewrite failed');
+    const e = toClientError(error, 'Tone rewrite failed');
+    return fail(res, stream, e.status, e.message);
   }
 });

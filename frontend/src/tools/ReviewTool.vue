@@ -57,7 +57,7 @@
                     <button class="btn btn-sm" type="button" :disabled="!isApplicable(item)" :title="isApplicable(item) ? '' : 'This text was not found — it may have been edited'" @click="accept(item)">Apply</button>
                   </div>
                 </div>
-                <div class="review-change" style="cursor: pointer" title="Show in text" @click="preview(item)">
+                <div class="review-change" style="cursor: pointer" title="Show in text" role="button" tabindex="0" @click="preview(item)" @keydown.enter.prevent="preview(item)" @keydown.space.prevent="preview(item)">
                   <span class="from">{{ item.original }}</span>
                   <span class="faint">→</span>
                   <span class="to">{{ item.replacement || '(remove)' }}</span>

@@ -1,13 +1,15 @@
 <template>
   <div class="stack">
     <div class="card toolbar">
-      <div class="chip-row" role="radiogroup" aria-label="Paraphrase mode">
+      <div class="chip-row" :role="compare ? 'group' : 'radiogroup'" aria-label="Paraphrase mode">
         <button
           v-for="m in modes"
           :key="m.id"
           type="button"
           class="chip"
           :class="{ active: compare ? compareModes.includes(m.id) : mode === m.id }"
+          :role="compare ? 'checkbox' : 'radio'"
+          :aria-checked="compare ? compareModes.includes(m.id) : mode === m.id"
           :title="m.hint"
           @click="pickMode(m.id)"
         >{{ m.label }}</button>
@@ -64,7 +66,7 @@
         </template>
         <template #foot>
           <button v-if="busy" class="btn btn-danger btn-sm" type="button" @click="stopAll"><Square /> Stop</button>
-          <button class="btn btn-primary" type="button" :disabled="busy || !input.trim()" @click="run">
+          <button class="btn btn-primary" type="button" :disabled="busy || !input.trim() || needsInstruction" :title="needsInstruction ? 'Describe the custom style first' : undefined" @click="run">
             <PenLine /> {{ compare ? 'Compare' : 'Paraphrase' }}
           </button>
         </template>
@@ -101,9 +103,9 @@
             <span v-if="edited" class="badge" title="Highlights show the original rewrite; your edits are in the Edit tab">Edited</span>
           </div>
           <div v-if="result" class="row">
-            <div class="tabs">
-              <button class="tab" :class="{ active: view === 'changes' }" type="button" @click="view = 'changes'">Changes</button>
-              <button class="tab" :class="{ active: view === 'edit' }" type="button" @click="view = 'edit'">Edit</button>
+            <div class="tabs" role="tablist" aria-label="Rewritten view">
+              <button class="tab" :class="{ active: view === 'changes' }" type="button" role="tab" :aria-selected="view === 'changes'" @click="view = 'changes'">Changes</button>
+              <button class="tab" :class="{ active: view === 'edit' }" type="button" role="tab" :aria-selected="view === 'edit'" @click="view = 'edit'">Edit</button>
             </div>
             <button class="btn btn-ghost btn-sm btn-icon" type="button" title="Copy" @click="copyText(output)"><Copy /></button>
             <ExportMenu :text="output" title="Paraphrased text" />
@@ -117,7 +119,7 @@
             <div v-if="result.frozenWordsMissing?.length" class="alert warn small" style="margin-bottom: 10px">
               <CircleAlert /> <span>These kept words were changed anyway: {{ result.frozenWordsMissing.join(', ') }}</span>
             </div>
-            <DiffView v-if="view === 'changes'" :diff-spans="result.diffSpans" interactive @update:text="onSwap" />
+            <DiffView v-if="view === 'changes'" :diff-spans="spans" interactive @update:spans="onSwap" />
             <textarea v-else v-model="output" class="editor" style="padding: 0; height: 100%" aria-label="Edit rewritten text"></textarea>
           </template>
           <StatusBits v-else kind="empty" message="Your rewritten text will appear here, with changes highlighted.">
@@ -144,7 +146,7 @@ import DiffView from '../components/DiffView.vue';
 import StatusBits from '../components/StatusBits.vue';
 import ExportMenu from '../components/ExportMenu.vue';
 import TagInput from '../components/TagInput.vue';
-import { api, errorMessage, isCancel, type JobProgress, type ParaphraseMode, type ParaphraseResult } from '../api';
+import { api, errorMessage, isCancel, type DiffSpan, type JobProgress, type ParaphraseMode, type ParaphraseResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { copyText, persistedJson, showToast, useToolInput } from '../store';
 import { wordCount, formatNumber } from '../lib/text';
@@ -177,6 +179,8 @@ const editor = ref<InstanceType<typeof EditorPane> | null>(null);
 const result = ref<ParaphraseResult | null>(null);
 const output = ref('');
 const swapped = ref('');
+/** Diff spans including the user's word swaps; kept here so switching tabs never loses them */
+const spans = ref<DiffSpan[]>([]);
 const progress = ref<JobProgress | null>(null);
 const req = useRequest();
 
@@ -187,7 +191,14 @@ const progressText = computed(() => {
   return `Rewriting part ${Math.min(p.completedChunks + p.failedChunks + 1, p.totalChunks)} of ${p.totalChunks}…`;
 });
 
-function onSwap(text: string) {
+function onSwap(next: DiffSpan[]) {
+  const text = next.filter(s => s.type !== 'removed').map(s => s.value).join('');
+  const manual = !!result.value && output.value !== (swapped.value || result.value.paraphrasedText);
+  if (manual && !window.confirm('Swapping this word replaces your manual edits from the Edit tab. Continue?')) {
+    spans.value = [...spans.value]; // new reference resets DiffView to the last accepted swaps
+    return;
+  }
+  spans.value = next;
   output.value = text;
   swapped.value = text;
 }
@@ -212,11 +223,15 @@ function deletePreset(name: string) {
 // ---------------- Jobs ----------------
 const wait = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => {
+    const onAbort = () => {
       clearTimeout(t);
       reject(Object.assign(new Error('canceled'), { name: 'CanceledError' }));
-    }, { once: true });
+    };
+    const t = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
   });
 
 async function runJob(m: ParaphraseMode, signal: AbortSignal, onProgress?: (p: JobProgress) => void, onJob?: (id: string) => void) {
@@ -224,11 +239,15 @@ async function runJob(m: ParaphraseMode, signal: AbortSignal, onProgress?: (p: J
     text: input.value,
     mode: m,
     synonymStrength: strength.value,
-    customInstruction: m === 'custom' ? customInstruction.value || undefined : undefined,
+    customInstruction: m === 'custom' ? customInstruction.value.trim() || undefined : undefined,
     frozenWords: frozenWords.value.length ? frozenWords.value : undefined
-  }, { signal });
+  }); // no signal: if Stop is pressed meanwhile we still need the jobId to cancel it
   onJob?.(job.jobId);
   const cancel = () => api.cancelJob(job.jobId).catch(() => undefined);
+  if (signal.aborted) {
+    cancel();
+    throw Object.assign(new Error('canceled'), { name: 'CanceledError' });
+  }
   signal.addEventListener('abort', cancel, { once: true });
 
   let delay = 400;
@@ -250,6 +269,7 @@ async function runSingle() {
     result.value = final;
     output.value = final.paraphrasedText;
     swapped.value = '';
+    spans.value = final.diffSpans;
     view.value = 'changes';
     addHistory({ tool: 'paraphrase', label: `Paraphrase · ${modeLabel(mode.value)}`, input: input.value, output: final.paraphrasedText });
   }
@@ -264,6 +284,9 @@ const comparisons = ref<Comparison[]>([]);
 let compareController: AbortController | null = null;
 const comparing = computed(() => comparisons.value.some(c => c.loading));
 const busy = computed(() => req.loading.value || comparing.value);
+// Custom mode needs instructions (the server rejects it without them)
+const needsInstruction = computed(() =>
+  (compare.value ? compareModes.value.includes('custom') : mode.value === 'custom') && !customInstruction.value.trim());
 
 function pickMode(id: ParaphraseMode) {
   if (!compare.value) {
@@ -306,6 +329,7 @@ function useComparison(c: Comparison) {
   result.value = c.result;
   output.value = c.result.paraphrasedText;
   swapped.value = '';
+  spans.value = c.result.diffSpans;
   view.value = 'changes';
 }
 
@@ -317,6 +341,10 @@ function stopAll() {
 
 function run() {
   if (!input.value.trim() || busy.value) return;
+  if (needsInstruction.value) {
+    showToast(compare.value ? 'Custom needs instructions — turn off Compare to add them, or deselect Custom' : 'Describe the custom style first');
+    return;
+  }
   return compare.value ? runCompare() : runSingle();
 }
 
@@ -334,6 +362,10 @@ async function rephraseSelection() {
     showToast('Select a shorter passage (up to 1,500 characters)');
     return;
   }
+  if (mode.value === 'custom' && !customInstruction.value.trim()) {
+    showToast('Describe the custom style first');
+    return;
+  }
   Object.assign(rephrase, { open: true, sentence: sel.text, start: sel.start, end: sel.end, alternatives: [] });
   const context = input.value.slice(Math.max(0, sel.start - 600), Math.min(input.value.length, sel.end + 600));
   const r = await rephraseReq.run(signal => api.rephraseSentence({
@@ -341,6 +373,7 @@ async function rephraseSelection() {
     context,
     mode: mode.value,
     count: 3,
+    customInstruction: mode.value === 'custom' ? customInstruction.value.trim() || undefined : undefined,
     frozenWords: frozenWords.value.length ? frozenWords.value : undefined
   }, { signal }));
   if (r) rephrase.alternatives = r.alternatives;

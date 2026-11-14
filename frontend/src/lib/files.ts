@@ -43,17 +43,31 @@ function download(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** "*italic*" markers (used by citations) become real italics in DOCX/PDF and stay as-is in Markdown. */
-function parts(line: string) {
+export interface ExportOptions {
+  /** Treat "*italic*" markers as italics (only citation/bibliography text uses them). Default false. */
+  italics?: boolean;
+}
+
+/**
+ * With `italics`, "*italic*" markers (used by citations) become real italics in DOCX/PDF, are removed
+ * in TXT and stay as-is in Markdown. Without it, asterisks are ordinary text everywhere.
+ */
+export function parts(line: string, italics = false) {
+  if (!italics) return line ? [{ text: line, italic: false }] : [];
   return line.split(/(\*[^*]+\*)/g).filter(Boolean).map(p =>
     p.length > 2 && p.startsWith('*') && p.endsWith('*') ? { text: p.slice(1, -1), italic: true } : { text: p, italic: false }
   );
 }
 
-export async function exportText(text: string, format: ExportFormat, title = 'ShivQuill document') {
+export function plainText(text: string, italics = false): string {
+  return italics ? text.replace(/\*([^*]+)\*/g, '$1') : text;
+}
+
+export async function exportText(text: string, format: ExportFormat, title = 'ShivQuill document', opts: ExportOptions = {}) {
   const base = safeName(title);
+  const italics = !!opts.italics;
   if (format === 'txt') {
-    download(new Blob([text.replace(/\*([^*]+)\*/g, '$1')], { type: 'text/plain;charset=utf-8' }), `${base}.txt`);
+    download(new Blob([plainText(text, italics)], { type: 'text/plain;charset=utf-8' }), `${base}.txt`);
     return;
   }
   if (format === 'md') {
@@ -65,7 +79,7 @@ export async function exportText(text: string, format: ExportFormat, title = 'Sh
     const paragraphs = [
       new Paragraph({ text: title, heading: HeadingLevel.HEADING_1 }),
       ...text.split('\n').map(line =>
-        new Paragraph({ children: parts(line).map(p => new TextRun({ text: p.text, italics: p.italic })) })
+        new Paragraph({ children: parts(line, italics).map(p => new TextRun({ text: p.text, italics: p.italic })) })
       )
     ];
     const doc = new Document({ sections: [{ children: paragraphs }] });
@@ -73,21 +87,24 @@ export async function exportText(text: string, format: ExportFormat, title = 'Sh
     return;
   }
   // PDF: use the browser's print-to-PDF, which supports every script/language (Hindi, Arabic, CJK…)
-  printAsPdf(text, title);
+  printAsPdf(text, title, italics);
 }
 
 function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
-function printAsPdf(text: string, title: string) {
+function printAsPdf(text: string, title: string, italics: boolean) {
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
   Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
   document.body.appendChild(iframe);
   const body = text
     .split(/\n{2,}/)
-    .map(p => `<p>${escapeHtml(p).replace(/\*([^*]+)\*/g, '<em>$1</em>').replace(/\n/g, '<br>')}</p>`)
+    .map(p => {
+      const html = escapeHtml(p);
+      return `<p>${(italics ? html.replace(/\*([^*]+)\*/g, '<em>$1</em>') : html).replace(/\n/g, '<br>')}</p>`;
+    })
     .join('');
   const doc = iframe.contentDocument!;
   doc.open();

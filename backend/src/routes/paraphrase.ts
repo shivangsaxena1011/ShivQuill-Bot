@@ -4,10 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocumentProcessingJob, documentJobRegistry, JobCancelledError } from '../chunkOrchestrator.js';
 import { generateDiffSpansForPairs } from '../diff.js';
 import { config } from '../config.js';
-import { executeLlmCompletion } from '../llm.js';
+import { completeStructured, MalformedModelResponseError } from '../structuredCompletion.js';
 import { getSentenceAlternativesPrompt } from '../prompts.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { ParaphraseResponse, ParaphraseMode, SynonymStrength, SemanticConsistencyReport } from '../types.js';
+import { toClientError } from '../httpErrors.js';
 
 export const paraphraseRouter = Router();
 
@@ -20,6 +21,9 @@ const paraphraseSchema = z.object({
   frozenWords: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
   model: z.string().optional(),
   async: z.boolean().optional()
+}).refine(d => d.mode !== 'custom' || !!d.customInstruction?.trim(), {
+  message: 'Describe the style you want for Custom mode',
+  path: ['customInstruction']
 });
 
 /**
@@ -154,6 +158,10 @@ paraphraseRouter.post('/', async (req: Request, res: Response) => {
       Array.from(new Set(frozenWords || []))
     );
 
+    // Never evict another user's running job to make room; ask the client to retry instead
+    if (documentJobRegistry.isFull()) {
+      return res.status(503).json({ error: 'The server is busy processing other documents. Please try again shortly.' });
+    }
     documentJobRegistry.register(job);
 
     // If client requested asynchronous background job processing (e.g. for massive documents)
@@ -169,8 +177,13 @@ paraphraseRouter.post('/', async (req: Request, res: Response) => {
 
     // Default: synchronous execution with retry and chunk recovery
     syncJob = job;
-    await job.execute();
-    return res.json(buildParaphraseResponse(job));
+    try {
+      await job.execute();
+      return res.json(buildParaphraseResponse(job));
+    } finally {
+      // Synchronous results are delivered in this response; nothing will poll for them later
+      documentJobRegistry.delete(jobId);
+    }
   } catch (error: any) {
     if (error instanceof JobCancelledError) {
       if (res.writableEnded || res.destroyed) return; // client already gone
@@ -180,7 +193,8 @@ paraphraseRouter.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.errors[0].message });
     }
     console.error('Paraphrase error:', error.message || error);
-    return res.status(500).json({ error: error.message || 'Failed to process paraphrasing request' });
+    const e = toClientError(error, 'Failed to process paraphrasing request');
+    return res.status(e.status).json({ error: e.message });
   }
 });
 
@@ -203,30 +217,46 @@ const sentenceSchema = z.object({
   mode: z.enum(['standard', 'fluency', 'formal', 'academic', 'simple', 'creative', 'expand', 'shorten', 'custom']).default('standard'),
   count: z.number().int().min(1).max(5).default(3),
   frozenWords: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+  customInstruction: z.string().max(2000).optional(),
   model: z.string().optional()
+}).refine(d => d.mode !== 'custom' || !!d.customInstruction?.trim(), {
+  message: 'Describe the style you want for Custom mode',
+  path: ['customInstruction']
 });
+
+/** Pulls the text out of an alternative that may arrive as a string or as {text|sentence|alternative}. */
+const alternativeText = z.union([
+  z.string(),
+  z.object({ text: z.string() }).transform(o => o.text),
+  z.object({ sentence: z.string() }).transform(o => o.sentence),
+  z.object({ alternative: z.string() }).transform(o => o.alternative)
+]);
+
+/** Accepts {"alternatives": [...]}, a bare array, or common key variants. */
+const alternativesSchema = z.union([
+  z.object({ alternatives: z.array(z.unknown()) }).transform(o => o.alternatives),
+  z.object({ options: z.array(z.unknown()) }).transform(o => o.options),
+  z.object({ rewrites: z.array(z.unknown()) }).transform(o => o.rewrites),
+  z.array(z.unknown())
+]).transform(items =>
+  items.flatMap(item => {
+    const r = alternativeText.safeParse(item);
+    return r.success ? [r.data] : [];
+  })
+).refine(items => items.length > 0, 'No alternatives returned');
 
 paraphraseRouter.post('/sentence', async (req: Request, res: Response) => {
   const signal = abortOnClientDisconnect(res);
   try {
-    const { sentence, context, mode, count, frozenWords, model } = sentenceSchema.parse(req.body);
-    const raw = await executeLlmCompletion(
-      getSentenceAlternativesPrompt(mode, count, context, frozenWords || []),
+    const { sentence, context, mode, count, frozenWords, customInstruction, model } = sentenceSchema.parse(req.body);
+    const alternatives = await completeStructured(
+      alternativesSchema,
+      getSentenceAlternativesPrompt(mode, count, context, frozenWords || [], customInstruction),
       sentence,
       model,
       0.8,
       signal
     );
-
-    let alternatives: string[] = [];
-    try {
-      const start = raw.indexOf('{');
-      const end = raw.lastIndexOf('}');
-      const parsed = JSON.parse(raw.slice(start, end + 1));
-      alternatives = z.object({ alternatives: z.array(z.string()) }).parse(parsed).alternatives;
-    } catch {
-      return res.status(422).json({ error: 'The AI returned an unexpected format. Please try again.' });
-    }
 
     const seen = new Set<string>([sentence.trim().toLowerCase()]);
     const unique = alternatives
@@ -240,7 +270,12 @@ paraphraseRouter.post('/sentence', async (req: Request, res: Response) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0].message });
     }
+    if (error instanceof MalformedModelResponseError) {
+      console.warn('[ShivQuill Sentence] Malformed model response:', error.message);
+      return res.status(422).json({ error: 'The AI returned an unexpected format. Please try again.' });
+    }
     console.error('Sentence rephrase error:', error.message || error);
-    return res.status(500).json({ error: error.message || 'Failed to rephrase sentence' });
+    const e = toClientError(error, 'Failed to rephrase sentence');
+    return res.status(e.status).json({ error: e.message });
   }
 });

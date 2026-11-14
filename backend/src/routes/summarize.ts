@@ -7,6 +7,7 @@ import { config } from '../config.js';
 import { splitIntoBatches, mapBatches } from '../batching.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+import { toClientError } from '../httpErrors.js';
 
 
 export const summarizeRouter = Router();
@@ -92,6 +93,7 @@ summarizeRouter.post('/', async (req: Request, res: Response) => {
       return fail(res, stream, 400, error.errors[0].message);
     }
     console.error('Summarize error:', error.message || error);
-    return fail(res, stream, 500, error.message || 'Failed to generate summary');
+    const e = toClientError(error, 'Failed to generate summary');
+    return fail(res, stream, e.status, e.message);
   }
 });

@@ -3,7 +3,7 @@
     <div v-if="workspace.chatOpen" class="drawer-backdrop" @click="workspace.chatOpen = false"></div>
   </Transition>
   <Transition name="drawer">
-    <aside v-if="workspace.chatOpen" class="drawer" role="dialog" aria-label="Writing assistant chat">
+    <aside v-if="workspace.chatOpen" ref="drawer" class="drawer" role="dialog" aria-label="Writing assistant chat" tabindex="-1">
       <div class="pane-head">
         <div class="row"><Bot :size="18" /><strong>Writing assistant</strong></div>
         <div class="row">
@@ -30,6 +30,7 @@
       </div>
       <form class="chat-input" @submit.prevent="send()">
         <textarea
+          ref="inputEl"
           v-model="draft"
           placeholder="Ask anything about your writing…"
           maxlength="20000"
@@ -43,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, toRaw, watch } from 'vue';
 import { Bot, LoaderCircle, Send, Square, X } from 'lucide-vue-next';
 import StatusBits from './StatusBits.vue';
 import { api, type ChatTurn } from '../api';
@@ -56,6 +57,9 @@ const messages = ref<ChatTurn[]>([greeting]);
 const draft = ref('');
 const useContext = ref(true);
 const log = ref<HTMLElement | null>(null);
+const drawer = ref<HTMLElement | null>(null);
+const inputEl = ref<HTMLTextAreaElement | null>(null);
+const MAX_TURN_CHARS = 20_000; // server maximum per message
 const req = useRequest();
 const live = useLiveText(1_000_000);
 const quick = ['Critique the tone and clarity', 'Suggest 3 titles', 'Improve paragraph transitions'];
@@ -68,7 +72,18 @@ function scrollDown() {
     if (log.value) log.value.scrollTop = log.value.scrollHeight;
   });
 }
-watch(() => workspace.chatOpen, open => open && scrollDown());
+// Move focus into the drawer on open and give it back to where it was on close
+let returnFocus: HTMLElement | null = null;
+watch(() => workspace.chatOpen, open => {
+  if (open) {
+    returnFocus = document.activeElement as HTMLElement | null;
+    scrollDown();
+    nextTick(() => (inputEl.value || drawer.value)?.focus());
+  } else {
+    returnFocus?.focus?.();
+    returnFocus = null;
+  }
+});
 
 function reset() {
   req.cancel();
@@ -79,11 +94,12 @@ async function send(text?: string) {
   const content = (text ?? draft.value).trim();
   if (!content || req.loading.value) return;
   draft.value = '';
-  messages.value.push({ role: 'user', content });
+  const question: ChatTurn = { role: 'user', content };
+  messages.value.push(question);
   scrollDown();
 
   // The greeting is UI-only; send real turns (last 20) to keep requests light
-  const turns = messages.value.filter(m => m !== greeting).slice(-20);
+  const turns = messages.value.filter(m => toRaw(m) !== greeting).slice(-20).map(m => ({ role: m.role, content: m.content.slice(0, MAX_TURN_CHARS) }));
   live.reset();
   const reply = await req.run(signal => api.chat(turns, useContext.value && contextText.value ? contextText.value : undefined, {
     signal,
@@ -92,8 +108,12 @@ async function send(text?: string) {
       scrollDown();
     }
   }));
-  if (reply) messages.value.push({ role: 'assistant', content: reply.content });
-  else if (!req.error.value) messages.value.pop(); // cancelled: drop the unanswered question
+  if (reply?.content?.trim()) messages.value.push({ role: 'assistant', content: reply.content });
+  else if (!reply && !req.error.value) {
+    // Cancelled: drop the unanswered question (unless "New chat" already removed it)
+    const i = messages.value.indexOf(question);
+    if (i !== -1) messages.value.splice(i, 1);
+  }
   scrollDown();
 }
 </script>

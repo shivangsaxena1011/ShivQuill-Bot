@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getGrammarSystemPrompt } from '../prompts.js';
-import { executeLlmCompletion } from '../llm.js';
+import { completeStructured, MalformedModelResponseError, looseOffset, looseString } from '../structuredCompletion.js';
 import { GrammarCheckResponse, GrammarIssue } from '../types.js';
 import { config } from '../config.js';
 import { splitIntoBatches, joinBatchOutputs, mapBatches } from '../batching.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
+import { toClientError } from '../httpErrors.js';
 
 export const grammarRouter = Router();
 
@@ -15,44 +16,38 @@ const grammarSchema = z.object({
 });
 
 const issueSchema = z.object({
-  id: z.string(),
-  category: z.enum(['grammar', 'spelling', 'punctuation', 'style']),
-  original: z.string(),
-  replacement: z.string(),
-  start: z.number().int().nonnegative().optional(),
-  end: z.number().int().nonnegative().optional(),
-  explanation: z.string()
+  id: looseString(50),
+  category: z.preprocess(
+    v => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.enum(['grammar', 'spelling', 'punctuation', 'style']).catch('grammar')
+  ),
+  original: z.preprocess(v => (v === null || v === undefined ? '' : String(v)), z.string()),
+  replacement: z.preprocess(v => (v === null || v === undefined ? '' : String(v)), z.string()),
+  start: looseOffset,
+  end: looseOffset,
+  explanation: looseString(1000)
 });
+
+/** Keeps the usable issues and drops malformed ones instead of failing the whole batch. */
+const issueList = z.array(z.unknown()).transform(items =>
+  items.flatMap(item => {
+    const r = issueSchema.safeParse(item);
+    return r.success && r.data.original ? [r.data] : [];
+  })
+);
 
 const parsedGrammarResponseSchema = z.object({
   correctedText: z.string(),
-  issues: z.array(issueSchema)
+  issues: issueList.default([])
 });
 
-class MalformedModelResponseError extends Error {
-  constructor(public raw: string, message: string) {
-    super(message);
-    this.name = 'MalformedModelResponseError';
-  }
-}
+type ParsedGrammarBatch = z.output<typeof parsedGrammarResponseSchema>;
 
 /**
- * Parses one batch's model output and recalibrates issue offsets against that batch's text.
+ * Recalibrates one batch's parsed issues against that batch's text.
  * Returned offsets are relative to `batchText`.
  */
-function parseGrammarBatch(batchText: string, rawResponse: string): { correctedText: string; issues: GrammarIssue[] } {
-  let parsedData: { correctedText: string; issues: Array<z.infer<typeof issueSchema>> };
-  try {
-    const jsonStart = rawResponse.indexOf('{');
-    const jsonEnd = rawResponse.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) {
-      throw new Error('No JSON structure found in model completion');
-    }
-    parsedData = parsedGrammarResponseSchema.parse(JSON.parse(rawResponse.substring(jsonStart, jsonEnd + 1)));
-  } catch (parseError: any) {
-    throw new MalformedModelResponseError(rawResponse, parseError.message);
-  }
-
+function locateGrammarIssues(batchText: string, parsedData: ParsedGrammarBatch): { correctedText: string; issues: GrammarIssue[] } {
   let searchOffset = 0;
   const issues: GrammarIssue[] = [];
 
@@ -105,8 +100,8 @@ grammarRouter.post('/', async (req: Request, res: Response) => {
     const batched = splitIntoBatches(text, config.maxCharsPerRequest);
 
     const batchResults = await mapBatches(batched, async batch => {
-      const rawResponse = await executeLlmCompletion(systemPrompt, batch.text, model, 0.1, signal);
-      return parseGrammarBatch(batch.text, rawResponse);
+      const parsed = await completeStructured(parsedGrammarResponseSchema, systemPrompt, batch.text, model, 0.1, signal);
+      return locateGrammarIssues(batch.text, parsed);
     }, signal);
 
     // Shift batch-relative offsets to document offsets and assign unique IDs
@@ -156,6 +151,7 @@ grammarRouter.post('/', async (req: Request, res: Response) => {
       });
     }
     console.error('Grammar check error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to process grammar check request' });
+    const e = toClientError(error, 'Failed to process grammar check request');
+    return res.status(e.status).json({ error: e.message });
   }
 });

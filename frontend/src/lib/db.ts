@@ -1,7 +1,8 @@
 /**
  * Tiny IndexedDB wrapper (no dependencies) for per-browser history and saved documents.
  * Everything stays on this device; nothing is sent to the server.
- * If IndexedDB is unavailable (private mode, blocked storage), calls resolve to empty results.
+ * If IndexedDB is unavailable (private mode, blocked storage), reads resolve to empty results
+ * and saveDocument rejects so the UI can say the save failed.
  */
 
 export interface HistoryEntry {
@@ -53,7 +54,7 @@ function openAt(version?: number): Promise<IDBDatabase | null> {
 
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
-  dbPromise = openAt().then(async db => {
+  const pending = openAt().then(async db => {
     if (!db) return null;
     const ok = db.objectStoreNames.contains('history') && db.objectStoreNames.contains('documents');
     if (ok) return db;
@@ -62,25 +63,48 @@ function openDb(): Promise<IDBDatabase | null> {
     const next = Math.max(DB_VERSION, db.version + 1);
     db.close();
     return openAt(next);
+  }).then(db => {
+    if (!db) {
+      // Don't cache a failed open: try again on the next call
+      if (dbPromise === pending) dbPromise = null;
+      return null;
+    }
+    // Another tab is upgrading the database: step aside and reopen on next use
+    const forget = () => {
+      if (dbPromise === pending) dbPromise = null;
+    };
+    db.onversionchange = () => {
+      db.close();
+      forget();
+    };
+    db.onclose = forget;
+    return db;
   });
-  return dbPromise;
+  dbPromise = pending;
+  return pending;
 }
 
-function run<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
+/** Runs one transaction; rejects if there is no database or the transaction fails/aborts. */
+function exec<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
   return openDb().then(db => {
-    if (!db) return undefined;
-    return new Promise<T | undefined>(resolve => {
+    if (!db) throw new Error('Storage is not available in this browser.');
+    return new Promise<T | undefined>((resolve, reject) => {
       try {
         const tx = db.transaction(store, mode);
         const req = fn(tx.objectStore(store));
         tx.oncomplete = () => resolve(req ? (req.result as T) : undefined);
-        tx.onerror = () => resolve(undefined);
-        tx.onabort = () => resolve(undefined);
-      } catch {
-        resolve(undefined);
+        tx.onerror = () => reject(tx.error || new Error('Storage error.'));
+        tx.onabort = () => reject(tx.error || new Error('Storage transaction was aborted.'));
+      } catch (err) {
+        reject(err);
       }
     });
   });
+}
+
+/** Like exec, but failures resolve to undefined (reads/history are best-effort). */
+function run<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
+  return exec(store, mode, fn).catch(() => undefined);
 }
 
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -90,15 +114,23 @@ const clip = (s: string) => (s.length > MAX_STORED_CHARS ? `${s.slice(0, MAX_STO
 
 export async function addHistory(entry: Omit<HistoryEntry, 'id' | 'createdAt'>): Promise<void> {
   if (!entry.input.trim()) return;
-  await run('history', 'readwrite', s => s.put({ ...entry, input: clip(entry.input), output: clip(entry.output), id: uid(), createdAt: Date.now() }));
-  // Trim old entries
-  const all = await listHistory();
-  if (all.length > MAX_HISTORY) {
-    const extra = all.slice(MAX_HISTORY);
-    await run('history', 'readwrite', s => {
-      for (const e of extra) s.delete(e.id);
-    });
-  }
+  await run('history', 'readwrite', s => {
+    s.put({ ...entry, input: clip(entry.input), output: clip(entry.output), id: uid(), createdAt: Date.now() });
+    // Trim the oldest entries, only when over the cap
+    if (!s.indexNames.contains('createdAt')) return;
+    const count = s.count();
+    count.onsuccess = () => {
+      let extra = count.result - MAX_HISTORY;
+      if (extra <= 0) return;
+      const cursor = s.index('createdAt').openCursor();
+      cursor.onsuccess = () => {
+        const c = cursor.result;
+        if (!c || extra-- <= 0) return;
+        c.delete();
+        c.continue();
+      };
+    };
+  });
 }
 
 export async function listHistory(): Promise<HistoryEntry[]> {
@@ -116,6 +148,7 @@ export async function clearHistory(): Promise<void> {
 
 // ---------------- Documents ----------------
 
+/** Saves (or updates) a document. Rejects when it could not be stored. */
 export async function saveDocument(doc: { id?: string; title: string; text: string; tool: string }): Promise<SavedDocument> {
   const saved: SavedDocument = {
     id: doc.id || uid(),
@@ -124,7 +157,7 @@ export async function saveDocument(doc: { id?: string; title: string; text: stri
     tool: doc.tool,
     updatedAt: Date.now()
   };
-  await run('documents', 'readwrite', s => s.put(saved));
+  await exec('documents', 'readwrite', s => s.put(saved));
   return saved;
 }
 

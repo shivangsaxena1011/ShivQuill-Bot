@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { splitIntoBatches, joinBatchOutputs, mapBatches } from '../batching.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
+import { toClientError } from '../httpErrors.js';
 
 
 export const humanizeRouter = Router();
@@ -108,6 +109,7 @@ humanizeRouter.post('/', async (req: Request, res: Response) => {
       return fail(res, stream, 400, error.errors[0].message);
     }
     console.error('Humanize error:', error.message || error);
-    return fail(res, stream, 500, error.message || 'Failed to humanize text');
+    const e = toClientError(error, 'Failed to humanize text');
+    return fail(res, stream, e.status, e.message);
   }
 });

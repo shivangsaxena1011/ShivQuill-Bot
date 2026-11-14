@@ -45,10 +45,12 @@ function resolveRequestType(): RequestType {
   return 'UNCONFIGURED';
 }
 
+/** Default Groq model, also used when a configured Groq model returns 404 (e.g. retired). */
+export const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-120b';
+
 export const config = {
   env: nodeEnv,
   port: parseInt(process.env.PORT || '5000', 10),
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   // Comma-separated list of extra allowed origins (the server's own host is always allowed)
   corsOrigins: (process.env.CORS_ORIGIN || '')
     .split(',')
@@ -58,14 +60,15 @@ export const config = {
   aiRequestsPerMinute: Math.max(1, parseInt(process.env.AI_REQUESTS_PER_MINUTE || (nodeEnv === 'test' ? '10000' : '30'), 10) || 30),
   corpusAdminApiKey: process.env.CORPUS_ADMIN_KEY || '',
   requestType: resolveRequestType(),
-  sentencesInPrompt: Math.max(1, parseInt(process.env.SENTENCES_IN_PROMPT || '3', 10)),
+  sentencesInPrompt: Math.max(1, parseInt(process.env.SENTENCES_IN_PROMPT || '3', 10) || 3),
   // Maximum characters sent to the provider in a single completion request.
   // Larger inputs are split into paragraph-aligned batches.
   maxCharsPerRequest: Math.max(1000, parseInt(process.env.MAX_CHARS_PER_REQUEST || '12000', 10) || 12000),
   // Comma-separated list of model IDs clients may request via the `model` field.
   // The provider's default model is always allowed.
   allowedModels: [
-    'openai/gpt-oss-120b',
+    // The Groq 404 fallback model (see llm.ts) must always be callable on Groq
+    ...(process.env.GROQ_API_KEY ? [GROQ_FALLBACK_MODEL] : []),
     ...(process.env.ALLOWED_MODELS || '').split(',').map(m => m.trim()).filter(Boolean)
   ],
 
@@ -78,7 +81,7 @@ export const config = {
   groq: {
     baseUrl: 'https://api.groq.com/openai/v1',
     apiKey: process.env.GROQ_API_KEY || '',
-    model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b'
+    model: process.env.GROQ_MODEL || GROQ_FALLBACK_MODEL
   },
   openrouter: {
     baseUrl: 'https://openrouter.ai/api/v1',

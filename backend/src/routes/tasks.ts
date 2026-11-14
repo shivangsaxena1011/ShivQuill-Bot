@@ -39,6 +39,9 @@ tasksRouter.post('/:id/cancel', (req: Request, res: Response) => {
 
 tasksRouter.delete('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
+  const exists = !!documentJobRegistry.get(id);
   const cancelled = documentJobRegistry.cancel(id);
-  return res.json({ status: cancelled ? 'cancelled' : 'not_found', taskId: id });
+  documentJobRegistry.delete(id);
+  if (!exists) return res.status(404).json({ status: 'not_found', taskId: id });
+  return res.json({ status: cancelled ? 'cancelled' : 'deleted', taskId: id });
 });

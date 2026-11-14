@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getSuggestionsSystemPrompt } from '../prompts.js';
-import { executeLlmCompletion } from '../llm.js';
+import { completeStructured, MalformedModelResponseError, looseOffset, looseString } from '../structuredCompletion.js';
 import { WritingSuggestionsResponse, WritingSuggestion } from '../types.js';
 import { config } from '../config.js';
 import { splitIntoBatches, mapBatches } from '../batching.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
+import { toClientError } from '../httpErrors.js';
 
 export const suggestionsRouter = Router();
 
@@ -16,41 +17,35 @@ const suggestionsSchema = z.object({
 });
 
 const rawSuggestionSchema = z.object({
-  id: z.string().optional(),
-  type: z.enum(['clarity', 'conciseness', 'vocabulary', 'tone', 'restructuring', 'academic']).default('clarity'),
-  originalText: z.string(),
-  suggestedText: z.string(),
-  explanation: z.string(),
-  start: z.number().int().nonnegative().optional(),
-  end: z.number().int().nonnegative().optional()
+  id: looseString(50),
+  type: z.preprocess(
+    v => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.enum(['clarity', 'conciseness', 'vocabulary', 'tone', 'restructuring', 'academic']).catch('clarity')
+  ),
+  originalText: z.preprocess(v => (v === null || v === undefined ? '' : String(v)), z.string()),
+  suggestedText: z.preprocess(v => (v === null || v === undefined ? '' : String(v)), z.string()),
+  explanation: looseString(1000),
+  start: looseOffset,
+  end: looseOffset
 });
+
+/** Keeps the usable suggestions and drops malformed ones instead of failing the whole batch. */
+const suggestionList = z.array(z.unknown()).transform(items =>
+  items.flatMap(item => {
+    const r = rawSuggestionSchema.safeParse(item);
+    return r.success && r.data.originalText ? [r.data] : [];
+  })
+);
 
 const rawResponseSchema = z.object({
-  suggestions: z.array(rawSuggestionSchema),
-  editorialSummary: z.string().optional()
+  suggestions: suggestionList,
+  editorialSummary: z.preprocess(v => (typeof v === 'string' ? v : undefined), z.string().optional())
 });
 
-class MalformedModelResponseError extends Error {
-  constructor(public raw: string, message: string) {
-    super(message);
-    this.name = 'MalformedModelResponseError';
-  }
-}
+type ParsedSuggestionsBatch = z.output<typeof rawResponseSchema>;
 
-/** Parses one batch's output; offsets are relative to `batchText` (0/0 when not locatable). */
-function parseSuggestionsBatch(batchText: string, rawResponse: string): { suggestions: WritingSuggestion[]; editorialSummary?: string } {
-  let parsedData: { suggestions: Array<z.infer<typeof rawSuggestionSchema>>; editorialSummary?: string };
-  try {
-    const jsonStart = rawResponse.indexOf('{');
-    const jsonEnd = rawResponse.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) {
-      throw new Error('No JSON object found in model output');
-    }
-    parsedData = rawResponseSchema.parse(JSON.parse(rawResponse.substring(jsonStart, jsonEnd + 1)));
-  } catch (parseError: any) {
-    throw new MalformedModelResponseError(rawResponse, parseError.message);
-  }
-
+/** Locates one batch's parsed suggestions; offsets are relative to `batchText` (0/0 when not locatable). */
+function locateSuggestions(batchText: string, parsedData: ParsedSuggestionsBatch): { suggestions: WritingSuggestion[]; editorialSummary?: string } {
   let searchOffset = 0;
   const suggestions: WritingSuggestion[] = [];
 
@@ -103,8 +98,8 @@ suggestionsRouter.post('/', async (req: Request, res: Response) => {
     const batched = splitIntoBatches(text, config.maxCharsPerRequest);
 
     const batchResults = await mapBatches(batched, async batch => {
-      const rawResponse = await executeLlmCompletion(systemPrompt, batch.text, model, 0.2, signal);
-      return parseSuggestionsBatch(batch.text, rawResponse);
+      const parsed = await completeStructured(rawResponseSchema, systemPrompt, batch.text, model, 0.2, signal);
+      return locateSuggestions(batch.text, parsed);
     }, signal);
 
     const validatedSuggestions: WritingSuggestion[] = [];
@@ -129,7 +124,8 @@ suggestionsRouter.post('/', async (req: Request, res: Response) => {
       concisenessCount: validatedSuggestions.filter(s => s.type === 'conciseness').length,
       vocabularyCount: validatedSuggestions.filter(s => s.type === 'vocabulary').length,
       toneCount: validatedSuggestions.filter(s => s.type === 'tone').length,
-      restructuringCount: validatedSuggestions.filter(s => s.type === 'restructuring').length
+      restructuringCount: validatedSuggestions.filter(s => s.type === 'restructuring').length,
+      academicCount: validatedSuggestions.filter(s => s.type === 'academic').length
     };
 
     const response: WritingSuggestionsResponse = {
@@ -156,6 +152,7 @@ suggestionsRouter.post('/', async (req: Request, res: Response) => {
       });
     }
     console.error('Suggestions error:', error.message || error);
-    return res.status(500).json({ error: error.message || 'Failed to generate writing suggestions' });
+    const e = toClientError(error, 'Failed to generate writing suggestions');
+    return res.status(e.status).json({ error: e.message });
   }
 });
