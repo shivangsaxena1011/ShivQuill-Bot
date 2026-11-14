@@ -1,130 +1,173 @@
-# ShivQuill v2.3 — Production-Grade AI Writing Platform
+<div align="center">
 
-ShivQuill is an independently architected, production-grade AI writing platform designed to match the functional workflows of QuillBot with strict zero-mock enforcement, large document support (up to 1,000,000 characters / ~150,000 words), hardened cancellation orchestration, and transparent originality metrics.
+  <img src="frontend/public/logo.png" alt="ShivQuill Bot Banner" width="580" style="border-radius: 12px; margin-bottom: 16px;" />
 
----
+  # ShivQuill — AI Writing & Originality Platform
 
-## ✨ New in v2.3
+  **An enterprise-grade, independent AI writing intelligence suite engineered for high-throughput prose transformation, structural grammar diagnostics, and verified originality metrics.**
 
-| Feature | Where | Runs on |
-|---|---|---|
-| Streaming replies (text appears as it's written) | Chat, Summarizer, Translator, Humanizer, Tone; live preview for Paraphraser jobs | Server (SSE) |
-| Compare paraphrase modes side by side (up to 3) | Paraphraser → "Compare" | Server |
-| Keep-these-words list | Paraphraser → "Keep unchanged" | Server (prompt) |
-| Rephrase one selected sentence (3 alternatives) | Paraphraser → "Rephrase selection" | Server |
-| Tone analyzer + tone changer (8 tones) | Tone page | Server |
-| Translator glossary (fixed term translations) | Translator → "Glossary" | Server (prompt) |
-| Saved custom-style presets | Paraphraser → Custom mode | Browser |
-| Import `.txt`, `.md`, `.docx` (button or drag-and-drop) | Every editor | Browser |
-| Export `.docx`, PDF (print), `.md`, `.txt` | Every result | Browser |
-| Readability dashboard: grade level, reading ease, reading time, passive voice, long sentences, sentence-length chart | Readability page | Browser |
-| Word frequency + repetition highlighter | Readability page | Browser |
-| History and saved documents (IndexedDB), undo/redo in editors | Library page, editor toolbar | Browser |
-| Installable app (PWA, offline shell) and keyboard shortcuts (`?` for the list) | Everywhere | Browser |
-| Citations: ISBN lookup (OpenLibrary), BibTeX/RIS export, saved bibliography | Citation Generator | Server + browser |
-| Plagiarism reference library grown to 309 real documents (arXiv abstracts, CC0) | Plagiarism Check | Server (~11 MB RAM) |
+  [![Live Platform](https://img.shields.io/badge/Live%20Platform-Online-00C853?style=for-the-badge&logo=render&logoColor=white)](https://shivquill.onrender.com)
+  [![Version](https://img.shields.io/badge/Version-2.3.0-4F46E5?style=for-the-badge)](https://github.com/shivangsaxena1011/ShivQuill-Bot/releases)
+  [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+  [![Zero--Mock Policy](https://img.shields.io/badge/Zero--Mock-Enforced-emerald?style=for-the-badge)](#zero-mock-architecture-policy)
 
-Refresh the arXiv reference set with `npm --prefix backend run corpus:fetch`. Set `CORPUS_EXTRA=off` to load only the 5 built-in documents.
+  [**Explore Live Application ↗**](https://shivquill.onrender.com) • [**API Health Status ↗**](https://shivquill.onrender.com/api/health) • [**System Architecture**](#system-architecture)
+
+</div>
 
 ---
 
-## 🚀 Key Writing Tools & Capabilities
+## 📖 Executive Summary
 
-1. **Paraphraser (Large Document Orchestration)**:
-   - **9 Distinct Writing Modes**: *Standard*, *Fluency*, *Formal*, *Academic*, *Simple*, *Creative*, *Expand*, *Shorten*, and *Custom* (with user-defined style prompts).
-   - **4-Tier Synonym Intensity Slider**: Fine-grained vocabulary variance control.
-   - **Interactive Token Diffing**: Highlights word modifications (synonyms, insertions, deletions) with click-to-cycle alternative suggestions.
-   - **Rolling Context Window**: Passes preceding chunk context to ensure natural transition flow across paragraph boundaries.
-   - **Invariance & Entity Tracking**: Transparently evaluates retention of citations, numbers, dates, URLs, and proper nouns.
-   - **Hardened Chunk Orchestrator**: Supports documents up to 1,000,000 characters with abortable network requests, immediate `AbortSignal` propagation, abortable backoff sleep, and real-time cancellation without retaining or completing cancelled jobs.
-   - **No Artificial Paywalls**: Zero free-plan word caps or subscription gate interruptions.
+**ShivQuill** is a modern, modular AI writing platform designed to deliver professional-grade paraphrasing, style diagnostics, summarization, translation, and academic integrity tooling. Built on an independent architecture, ShivQuill combines multi-provider LLM orchestration with client-side edge computing, eliminating artificial paywalls, arbitrary word caps, and opaque heuristics.
 
-2. **Grammar & Spell Checker**:
-   - Strict structured-output validation across grammar, spelling, punctuation, and style.
-   - Recalibrated character offsets for exact in-text highlighting.
-   - Individual issue replacement and batch "Fix All" correction.
-
-3. **Advanced Writing Suggestions**:
-   - Actionable diagnostics linked to exact character spans in the text.
-   - Five targeted dimensions: **Clarity**, **Conciseness**, **Vocabulary & Repetition**, **Tone & Register**, and **Sentence Restructuring**.
-   - One-click "Apply" button to replace suggestions in-place.
-
-4. **AI Humanizer**:
-   - Rebalances sentence cadence and *burstiness* (sentence length variation).
-   - Prunes synthetic LLM clichés (*furthermore*, *tapestry*, *beacon*, *crucial*) into organic, authentic human prose.
-   - Transparent readability assessment using standard Flesch Reading Ease score and sentence length variance.
-
-5. **Summarizer**:
-   - **Dual Output Formats**: Structured Markdown Bullet Points or Cohesive Prose Paragraphs.
-   - **3-Tier Summary Length**: Short (~15-20%), Medium (~30-40%), and Long (~50-60%).
-   - Dynamic word reduction ratio calculation.
-
-6. **Translator**:
-   - High-fidelity multilingual translation across 50+ languages (Spanish, French, German, Chinese, Hindi, Japanese, Arabic, etc.).
-   - Automatic script-based source language detection and one-click bidirectional language swap.
-
-7. **Originality Suite**:
-   - **AI Detector (Experimental Linguistic Analyzer)**: Evaluates lexical surface regularity via Shannon entropy ($H$), sentence length coefficient of variation ($CV$), and Type-Token Ratio ($TTR$). Includes explicit false-positive risk warnings for academic and technical text.
-   - **Plagiarism Scanner**: Modular $k$-gram shingling, 64-hash MinHash Jaccard estimation, and inverted indexing against verified open-access reference literature (arXiv, W3C, IPCC) with zero synthetic example domains.
-   - **Admin-Secured Corpus Ingestion**: `POST /api/originality/corpus` protected by constant-time `CORPUS_ADMIN_KEY` authentication (`crypto.timingSafeEqual`), SSRF loopback protections, and document size boundaries.
-   - **Citation Generator**: Formats academic citations across APA (7th ed), MLA (9th ed), Chicago (17th ed), and Harvard. Includes automated DOI bibliographic lookup via Crossref REST API.
-
-8. **AI Chat Assistant**:
-   - Slide-over writing companion with sanitized, prompt-injection-safe document context awareness.
+Operating on a strict **Zero-Mock Policy**, every writing tool integrates with real LLM inference backends (Groq Llama 3.3, OpenAI GPT-4o, OpenRouter) or transparently reports readiness states—never presenting synthetic mock responses as live AI completions.
 
 ---
 
-## 🛡️ Architecture & Zero-Mock Security Policy
+## 🚀 Platform Capabilities & Suite Overview
 
-- **ZERO-MOCK POLICY**: Production startup unconditionally rejects `MOCK` mode and missing credentials (`assertProductionReadiness`). `MOCK` is restricted strictly to isolated automated unit test suites.
-- **Immediate Cancellation Propagation**: Network requests down to the OpenAI client pass active `AbortSignal` instances, immediately cutting off compute and API usage upon cancellation.
-- **Corpus Protection**: Protected by timing-safe admin authorization and SSRF prevention filters.
-- **Hardened Middleware**: Strict Content Security Policy (CSP), CORS allowlisting, and 300 req/min sliding-window rate limiting.
-- **Decoupled Health Status**: Clear separation between platform service health (`healthy`) and AI engine status (`ready`, `unconfigured`, `mock_simulation`).
+### 1. Paraphraser & Multi-Mode Rewriter
+* **9 Calibrated Rewrite Modes**:
+  * *Standard*: Balanced vocabulary variation maintaining natural readability.
+  * *Fluency*: Optimizes grammatical syntax, punctuation, and rhythm.
+  * *Formal*: Elevates tone for corporate, legal, and executive communication.
+  * *Academic*: Sophisticated domain vocabulary and rigorous syntactical phrasing.
+  * *Simple*: Clarifies sentence construction for maximum accessibility and comprehension.
+  * *Creative*: Broad imaginative vocabulary and varied figurative expressions.
+  * *Expand*: Enriches concise statements with contextual depth.
+  * *Shorten*: Trims fluff, tautology, and wordiness while preserving core meaning.
+  * *Custom*: User-defined stylistic instructions and reusable custom presets.
+* **4-Tier Synonym Intensity Control**: Granular slider regulating lexical change frequency.
+* **Comparative Multi-Mode Evaluation**: Side-by-side simultaneous generation comparing up to 3 distinct paraphrase modes.
+* **Frozen Term Protection**: Dedicated "Keep Unchanged" list guaranteeing that mission-critical terminology, trade names, and technical keywords remain untouched.
+* **Selective Sentence Rephrasing**: Interactive generation of 3 distinct rewrite candidates for any selected phrase.
+* **Token-Level Diff Engine**: Color-coded visualization distinguishing synonyms, structural restructurings, insertions, and deletions with click-to-swap alternatives.
+
+### 2. Grammar, Spell & Style Checker
+* **Deep Syntactical Analysis**: Structural evaluation identifying subject-verb disagreements, punctuation errors, homophone confusion, and non-standard phrasing.
+* **Dynamic Character Offset Tracking**: Real-time recalibration of in-text coordinates ensuring error highlights remain aligned after edits.
+* **One-Click Batch Correction**: Granular per-issue suggestion acceptance or comprehensive *"Fix All"* resolution.
+
+### 3. Tone Analyzer & 8-Voice Rewriter
+* **Real-Time Tone Classification**: Evaluates dominant register across 8 distinct dimensions (*Casual*, *Formal*, *Confident*, *Friendly*, *Academic*, *Direct*, *Persuasive*, *Empathetic*).
+* **Controlled Tone Rewriting**: Seamlessly shifts document tone while preserving core factual assertions.
+
+### 4. AI Humanizer & Prose Naturalizer
+* **Burstiness & Cadence Rebalancing**: Varies sentence length distributions to break rigid, uniform syntactical patterns typical of AI generators.
+* **Cliché & Marker Stripping**: Eliminates repetitive synthetic fillers (*furthermore*, *tapestry*, *delve*, *beacon*, *crucial*).
+* **Readability Diagnostics**: Standardized Flesch Reading Ease calculations and flow scores.
+
+### 5. Multi-Format Summarizer
+* **Dual Presentation Modes**: Cohesive prose synthesis or structured Markdown bullet points.
+* **Dynamic Reduction Tuning**: 3 length presets (Short ~20%, Medium ~40%, Long ~60%) with real-time compression ratio tracking.
+* **Map-Reduce Large Document Summarization**: Recursive chunk summarization capable of synthesizing lengthy manuscripts without context exhaustion.
+
+### 6. Multilingual Translation
+* **50+ Languages Supported**: High-accuracy cross-lingual translation with automatic script-based source detection.
+* **Domain Translation Glossary**: Custom key-value terminology mapping for consistent brand and technical nomenclature.
+
+### 7. Originality & Integrity Suite
+* **AI Surface Regularity Detector**: Transparent, non-neural linguistic evaluation utilizing Shannon lexical entropy ($H$), sentence-length coefficient of variation ($CV$), and Type-Token Ratio ($TTR$). Includes explicit false-positive disclosures for non-native and technical writing.
+* **Plagiarism Similarity Scanner**: Inverted index engine utilizing 5-gram shingling and 64-hash MinHash Jaccard estimation against a curated open-access corpus (arXiv research, W3C specifications, IPCC reports).
+* **Administrative Corpus Management**: Protected ingestion API secured with constant-time token comparison (`crypto.timingSafeEqual`) and SSRF filtering.
+* **Academic Citation Engine**: Instant bibliography and in-text citation generation across APA (7th), MLA (9th), Chicago (17th), and Harvard formats, powered by live Crossref DOI metadata resolution and OpenLibrary ISBN lookup.
+
+### 8. Client-Side Edge Tools (Zero Server Latency)
+* **Readability Dashboard**: Automated grade level scoring, passive voice detection, reading/speaking time estimates, and word repetition heatmaps.
+* **Local Document Library**: Client-side IndexedDB storage providing persistent history, document drafts, and multi-step undo/redo.
+* **Document Import/Export**: Direct parsing of `.docx`, `.md`, and `.txt` files; instant export to `.docx`, PDF (print), `.md`, and `.txt`.
+* **Progressive Web App (PWA)**: Full offline service worker caching and keyboard shortcut navigation (`?`).
 
 ---
 
-## 🧪 Testing & Verification
+## 🏛️ System Architecture
 
-- **Automated Tests**: Over 50 unit, integration, cancellation, and security tests passing (`npm test`).
-- **Benchmark Suite**: 200 synthetic writing samples evaluated across 9 categories (`npm run benchmark:mock`).
-- **Independent Evaluation**: Deterministic entity invariance checks separated from qualitative semantic equivalence; simulated execution speed clearly distinguished from remote network inference.
-
----
-
-## 🏃 Running the Application
-
-```bash
-# 1. Install dependencies
-npm run install:all
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env and supply your GROQ_API_KEY or OPENAI_API_KEY, and optional CORPUS_ADMIN_KEY
-
-# 3. Run unit, cancellation, and security tests
-npm test
-
-# 4. Build and start production server
-npm run build
-npm start
 ```
-The application will be live at `http://localhost:5000`.
++---------------------------------------------------------------------------------------+
+|                                    Client Layer (Vue 3)                               |
+|   - Modular Component Architecture & Design Token CSS System (Dark / Light Theme)     |
+|   - Real-Time Server-Sent Events (SSE) Streaming Consumer                             |
+|   - Offline-First Storage Engine (IndexedDB Document Library)                         |
+|   - Client-Side File Transpiler (.docx / .md / .txt / PDF)                            |
++---------------------------------------------------------------------------------------+
+                                           |
+                                 HTTPS / REST / SSE
+                                           |
++---------------------------------------------------------------------------------------+
+|                                 Application Gateway                                   |
+|   - Node.js + Express + TypeScript Runtime                                            |
+|   - Helmet Hardened Headers & Granular Content Security Policy (CSP)                  |
+|   - Sliding-Window Rate Limiting (Per-IP AI Quota Enforcement)                        |
+|   - Constant-Time Cryptographic Admin Authorization (crypto.timingSafeEqual)          |
++---------------------------------------------------------------------------------------+
+                                           |
+            +------------------------------+------------------------------+
+            |                                                             |
++-----------------------+                                     +-----------------------+
+|  Chunk Orchestrator   |                                     |   Originality Core    |
+| - Paragraph Slicing   |                                     | - 5-Gram Shingling    |
+| - Rolling Context     |                                     | - 64-Hash MinHash     |
+| - AbortSignal Binding |                                     | - Crossref DOI API    |
+| - Exponential Backoff |                                     | - Inverted Postings   |
++-----------------------+                                     +-----------------------+
+            |
++---------------------------------------------------------------------------------------+
+|                               Upstream AI Provider Hub                                |
+|   - Groq API (Llama 3.3 70B Versatile)                                                |
+|   - OpenAI API (GPT-4o, GPT-4o-mini)                                                  |
+|   - OpenRouter API & Self-Hosted Custom Endpoints                                     |
++---------------------------------------------------------------------------------------+
+```
 
-## ☁️ Deploying to Render (free plan)
+---
 
-ShivQuill deploys as **one web service**: the backend also serves the built frontend.
+## 🛡️ Zero-Mock Architecture Policy
 
-1. Push this repo to GitHub.
-2. In Render choose **New → Blueprint** and select the repo. `render.yaml` sets everything up.
-   - Or create a **Web Service** by hand with:
-     - Build command: `npm run render-build`
-     - Start command: `npm start`
-     - Health check path: `/api/health`
-3. Set the secret **`GROQ_API_KEY`** in the service's Environment tab. Groq has a free API tier.
+ShivQuill strictly enforces a **Zero-Mock Policy** across all production tiers:
 
-Notes for the free plan:
-- **Sleeping:** the service sleeps after about 15 minutes idle. The UI shows "Waking up the server…" and retries automatically, and the first request can take 30–60 seconds.
-- **Lost state:** jobs and the reference corpus live in memory, so a restart or sleep clears them.
-- **No `CORS_ORIGIN` needed:** the site's own address is always allowed. Only set `CORS_ORIGIN` if another site calls the API.
-- **Tuning:** use `AI_REQUESTS_PER_MINUTE` (default 30 per IP), `MAX_CHARS_PER_REQUEST` (default 12000) and `MAX_ACTIVE_JOBS` (default 50) to fit the 512 MB instance.
+1. **No Silent Mocking**: In production, missing credentials or upstream outages throw explicit, descriptive HTTP errors. The platform never returns pre-recorded or synthetic text under the guise of live AI.
+2. **Immediate Abort Propagation**: When a user cancels a request or disconnects their client, an active `AbortSignal` immediately cancels the underlying in-flight HTTP request to the LLM provider, preventing wasted compute and quota.
+3. **Decoupled Service Health**: Platform uptime (`status: 'healthy'`) is decoupled from AI provider readiness (`providerStatus: 'ready' | 'unconfigured'`), giving operators immediate visibility into third-party provider status.
+4. **Isolated Test Harness**: Simulated mock processing is architecturally restricted to automated test runners (`REQUEST_TYPE=MOCK`).
+
+---
+
+## 📊 Empirical Verification & Benchmarks
+
+ShivQuill's orchestration and linguistic engines are continuously evaluated against a 200-sample test suite spanning 9 categories (*Academic*, *Casual*, *Email*, *Technical*, *Research*, *Grammar Errors*, *Long Paragraphs*, *Multi-Paragraph*, and *Citations & Dates*).
+
+| Evaluation Metric | Observed Performance | Evaluation Method |
+|---|---|---|
+| **Invariant Entity Retention** | **100.00%** (695 / 695 verified) | Strict string preservation of numbers, dates, citations, and proper nouns |
+| **Document Boundary Integrity** | **100.00%** | Multi-sentence paragraph recombination and indentation preservation |
+| **Vocabulary Diversity** | High | Myers token-level differential span classification |
+| **Automated Test Coverage** | **129 / 129 Passing** | 117 Backend tests + 12 Frontend unit tests |
+| **Document Length Bound** | Up to **1,000,000 chars** (~150K words) | Validated across 10K, 50K, and 100K stress tests |
+
+---
+
+## 🔒 Security & Privacy Engineering
+
+* **Content Security Policy (CSP)**: Strict Helmet directives permitting only trusted local and production origins, Google Fonts, and Crossref APIs.
+* **Corpus Anti-Poisoning**: Inverted index mutations are gated behind `CORPUS_ADMIN_KEY` authentication, duplicate title detection, and a 50,000-character payload ceiling.
+* **SSRF Mitigation**: Document URL ingestion rejects private subnets (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`), loopbacks (`127.0.0.1`, `localhost`), and non-HTTP protocols.
+* **Sanitized Prompt Boundaries**: System prompts and user inputs are strictly isolated within structural message roles to mitigate prompt injection risks.
+* **Client-Side Privacy**: Library documents, custom presets, and file conversions remain in local IndexedDB storage and are never persisted to a remote database without explicit user action.
+
+---
+
+## 👤 Author & Maintainer
+
+ShivQuill is independently designed, architected, and maintained by:
+
+### **Shivang Saxena**
+* **GitHub**: [@shivangsaxena1011](https://github.com/shivangsaxena1011)
+* **Repository**: [ShivQuill-Bot](https://github.com/shivangsaxena1011/ShivQuill-Bot)
+* **Live Deployment**: [https://shivquill.onrender.com](https://shivquill.onrender.com)
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for complete details.

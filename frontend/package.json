@@ -1,6 +1,7 @@
 {
   "name": "shivquill-frontend",
   "version": "2.3.0",
+  "author": "Shivang Saxena <shivangsaxena1011@gmail.com>",
   "private": true,
   "type": "module",
   "scripts": {

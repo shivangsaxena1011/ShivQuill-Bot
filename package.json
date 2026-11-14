@@ -25,7 +25,7 @@
     "ai-humanizer",
     "originality"
   ],
-  "author": "ShivQuill Team",
+  "author": "Shivang Saxena <shivangsaxena1011@gmail.com>",
   "license": "MIT",
   "engines": {
     "node": ">=20"
