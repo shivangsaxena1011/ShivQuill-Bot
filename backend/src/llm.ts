@@ -215,6 +215,19 @@ export async function executeChatCompletion(
       abortErr.name = 'AbortError';
       throw abortErr;
     }
+
+    // Automatic fallback for Groq when 70B model access is unavailable on the account
+    if (
+      config.requestType === 'GROQ' &&
+      model !== 'openai/gpt-oss-120b' &&
+      (error?.status === 404 || String(error?.message).includes('does not exist or you do not have access'))
+    ) {
+      console.warn(
+        `[ShivQuill LLM] Groq model '${model}' is unavailable (404, possibly retired). Falling back to 'openai/gpt-oss-120b'...`
+      );
+      return executeChatCompletion(systemPrompt, conversation, 'openai/gpt-oss-120b', temperature, abortSignal, onToken);
+    }
+
     console.error(`[ShivQuill LLM] Error calling provider ${config.requestType}:`, error.message || error);
     // Explicitly rethrow provider error to prevent silent mock output to real users.
     // Transport/HTTP failures were already retried by the SDK, so only an empty completion is retryable.

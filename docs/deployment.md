@@ -31,7 +31,7 @@ To use real AI inference, set `REQUEST_TYPE=GROQ` (or `OPENAI` / `OPENROUTER`) a
 ```ini
 REQUEST_TYPE=GROQ
 GROQ_API_KEY=gsk_your_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
 ### Step 4: Run Automated Tests & Benchmarks

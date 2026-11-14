@@ -63,11 +63,11 @@ export const config = {
   // Larger inputs are split into paragraph-aligned batches.
   maxCharsPerRequest: Math.max(1000, parseInt(process.env.MAX_CHARS_PER_REQUEST || '12000', 10) || 12000),
   // Comma-separated list of model IDs clients may request via the `model` field.
-  // The provider's default model is always allowed. Empty = only the default model.
-  allowedModels: (process.env.ALLOWED_MODELS || '')
-    .split(',')
-    .map(m => m.trim())
-    .filter(Boolean),
+  // The provider's default model is always allowed.
+  allowedModels: [
+    'openai/gpt-oss-120b',
+    ...(process.env.ALLOWED_MODELS || '').split(',').map(m => m.trim()).filter(Boolean)
+  ],
 
   // Provider configs
   custom: {
@@ -78,7 +78,7 @@ export const config = {
   groq: {
     baseUrl: 'https://api.groq.com/openai/v1',
     apiKey: process.env.GROQ_API_KEY || '',
-    model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+    model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b'
   },
   openrouter: {
     baseUrl: 'https://openrouter.ai/api/v1',
