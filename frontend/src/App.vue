@@ -1,12 +1,10 @@
 <template>
   <div class="app">
     <aside class="sidebar" aria-label="Tools">
-      <div class="brand">
-        <div class="brand-mark">SQ</div>
-        <div>
-          <div class="brand-name">ShivQuill</div>
-          <div class="brand-sub">AI writing studio</div>
-        </div>
+      <div class="brand-container">
+        <a href="/" class="brand-logo-link" title="ShivQuill Bot — AI Writing Platform">
+          <img src="/logo.jpg" alt="ShivQuill Bot Logo" class="brand-logo-img" />
+        </a>
       </div>
       <template v-for="group in groups" :key="group.title">
         <div class="nav-section">{{ group.title }}</div>
@@ -25,10 +23,34 @@
       <div class="sidebar-foot">
         <button class="nav-item" type="button" @click="workspace.chatOpen = true"><MessageSquare /> Ask the assistant</button>
         <button class="nav-item" type="button" @click="workspace.shortcutsOpen = true"><Keyboard /> Shortcuts <kbd class="kbd">?</kbd></button>
+        <div class="dev-card">
+          <div class="dev-card-header">
+            <span class="dev-badge-pill">Developer</span>
+          </div>
+          <a href="https://github.com/shivangsaxena1011" target="_blank" rel="noopener noreferrer" class="dev-card-link" title="View Shivang Saxena's GitHub">
+            <div class="dev-avatar">SS</div>
+            <div class="dev-details">
+              <span class="dev-full-name">Shivang Saxena</span>
+              <span class="dev-handle">@shivangsaxena1011</span>
+            </div>
+          </a>
+        </div>
       </div>
     </aside>
 
     <div class="main">
+      <div class="mobile-header-bar">
+        <a href="/" class="mobile-logo-link" title="ShivQuill Bot">
+          <img src="/logo.jpg" alt="ShivQuill Bot Logo" class="mobile-logo-img" />
+        </a>
+        <div class="mobile-dev-badge">
+          <span class="mobile-dev-role">Dev</span>
+          <a href="https://github.com/shivangsaxena1011" target="_blank" rel="noopener noreferrer" class="mobile-dev-name">
+            Shivang Saxena ↗
+          </a>
+        </div>
+      </div>
+
       <nav class="mobile-tabs" aria-label="Tools">
         <button
           v-for="t in allTools"
@@ -75,6 +97,23 @@
         <KeepAlive>
           <component :is="current.component" :key="current.id" v-bind="current.props || {}" />
         </KeepAlive>
+
+        <footer class="app-footer">
+          <div class="footer-wrap">
+            <div class="footer-brand-info">
+              <img src="/logo.jpg" alt="ShivQuill Bot" class="footer-logo-img" />
+              <div class="footer-text">
+                <span class="footer-title">ShivQuill AI Writing Platform</span>
+                <span class="footer-sub">Designed &amp; Developed by <a href="https://github.com/shivangsaxena1011" target="_blank" rel="noopener noreferrer" class="dev-inline-link">Shivang Saxena</a></span>
+              </div>
+            </div>
+            <div class="footer-links">
+              <a href="https://github.com/shivangsaxena1011/ShivQuill-Bot" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost">
+                GitHub Repository ↗
+              </a>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
 
