@@ -194,3 +194,31 @@ describe('AI detector edge cases', () => {
     expect(b.aiGenerated + b.aiRefined + b.humanRefined + b.human).toBe(100);
   });
 });
+
+describe('unreachable search providers', () => {
+  it('pauses a provider that times out, so later scans skip it instantly', async () => {
+    let calls = 0;
+    const dead: SearchProvider = {
+      id: 'dead-timeout-test',
+      label: 'Dead engine',
+      concurrency: 1,
+      minIntervalMs: 0,
+      async search() {
+        calls++;
+        await new Promise(r => setTimeout(r, 50));
+        throw new Error('Request timed out');
+      }
+    };
+    const text = Array.from({ length: 6 }, (_, i) => `Paragraph ${i} describes the slow migration of grey whales along the Pacific coast in winter ${i}.`).join(' ');
+    const first = await scanForPlagiarism(text, { online: true, providers: [dead] });
+    expect(calls).toBe(1); // stopped after the first timeout instead of waiting on every query
+    expect(first.coverage.providers[0].status).toBe('failed');
+    expect(first.coverage.providers[0].message).toMatch(/Not responding/);
+
+    const started = Date.now();
+    const second = await scanForPlagiarism(text, { online: true, providers: [dead] });
+    expect(calls).toBe(1); // not called again while paused
+    expect(second.coverage.providers[0].message).toMatch(/skipped for another/);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
