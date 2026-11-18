@@ -75,7 +75,7 @@ import ExportMenu from '../components/ExportMenu.vue';
 import { api, type GlossaryEntry, type TranslateResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { useLiveText } from '../composables/useLiveText';
-import { copyText, persistedJson, useToolInput } from '../store';
+import { copyText, persistedJson, showToast, useToolInput } from '../store';
 import { addHistory } from '../lib/db';
 
 const RTL = ['ar', 'he', 'fa', 'ur'];
@@ -110,9 +110,16 @@ const targetName = computed(() => langName(shownLang.value));
 const rtl = computed(() => RTL.includes(result.value?.targetLang || ''));
 const rtlTarget = computed(() => RTL.includes(pendingTarget.value));
 
+// The source text the shown translation was made from
+const translatedFrom = ref('');
+
 function swap() {
   if (source.value === 'auto') return;
-  if (result.value) {
+  if (result.value && input.value !== translatedFrom.value) {
+    // The source text was edited after translating: swap the languages only, never paste an old translation over it
+    [source.value, target.value] = [result.value.targetLang, source.value];
+    result.value = null;
+  } else if (result.value) {
     // Swap around the shown translation: its language becomes the source
     const from = source.value;
     source.value = result.value.targetLang;
@@ -134,7 +141,9 @@ async function run() {
   const to = target.value;
   pendingTarget.value = to;
   const r = await req.run(signal => api.translate(text, source.value, to, terms, { signal, onDelta: live.append }));
+  if (r && input.value !== text) return showToast('Your text changed while this was running — run it again');
   if (r) {
+    translatedFrom.value = text;
     result.value = r;
     addHistory({ tool: 'translate', label: `Translate → ${langName(r.targetLang || to)}`, input: text, output: r.translatedText });
   }

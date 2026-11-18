@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, ref } from 'vue';
+import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import { Copy, History, Library, Trash2 } from 'lucide-vue-next';
 import StatusBits from '../components/StatusBits.vue';
 import ExportMenu from '../components/ExportMenu.vue';
@@ -90,8 +90,8 @@ const openTargets: { id: ToolId; name: string }[] = [
   { id: 'summarize', name: 'Summarizer' },
   { id: 'translate', name: 'Translator' },
   { id: 'readability', name: 'Readability' },
-  { id: 'detector', name: 'AI Pattern Check' },
-  { id: 'plagiarism', name: 'Plagiarism Check' }
+  { id: 'detector', name: 'AI Detector' },
+  { id: 'plagiarism', name: 'Plagiarism Checker' }
 ];
 
 async function refresh() {
@@ -103,7 +103,13 @@ async function refresh() {
 onMounted(refresh);
 onActivated(refresh); // the page is kept alive; reload when revisited
 
-const q = computed(() => query.value.trim().toLowerCase());
+// Debounced: searching long documents and history on every keystroke made typing lag
+const q = ref('');
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(query, v => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => (q.value = v.trim().toLowerCase()), 200);
+});
 const filteredDocs = computed(() => (q.value ? documents.value.filter(d => `${d.title} ${d.text}`.toLowerCase().includes(q.value)) : documents.value));
 const filteredHistory = computed(() => (q.value ? history.value.filter(h => `${h.label} ${h.input} ${h.output}`.toLowerCase().includes(q.value)) : history.value));
 
@@ -114,13 +120,25 @@ function openDoc(text: string, tool: string) {
 }
 
 async function removeDoc(id: string) {
-  await deleteDocument(id);
-  documents.value = documents.value.filter(d => d.id !== id);
+  const doc = documents.value.find(d => d.id === id);
+  // Saved documents can't be recovered once deleted
+  if (!window.confirm(`Delete "${doc?.title || 'this document'}" permanently?`)) return;
+  try {
+    await deleteDocument(id);
+    documents.value = documents.value.filter(d => d.id !== id);
+    showToast('Document deleted');
+  } catch {
+    showToast('Could not delete — storage is unavailable');
+  }
 }
 
 async function removeHistory(id: string) {
-  await deleteHistory(id);
-  history.value = history.value.filter(h => h.id !== id);
+  try {
+    await deleteHistory(id);
+    history.value = history.value.filter(h => h.id !== id);
+  } catch {
+    showToast('Could not delete — storage is unavailable');
+  }
 }
 
 async function clearAll() {

@@ -169,7 +169,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     providerMessage: providerStatus.message,
     // Which plagiarism sources this server will search (names only, never keys)
     plagiarismSearch: {
-      online: process.env.PLAGIARISM_ONLINE !== 'false' && config.env !== 'test',
+      online: config.plagiarismOnline,
       sources: configuredProviders().map(p => p.label),
       openAlexKey: Boolean(process.env.OPENALEX_API_KEY)
     }

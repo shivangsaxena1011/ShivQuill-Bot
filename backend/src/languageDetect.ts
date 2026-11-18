@@ -42,24 +42,32 @@ export function detectLanguageCode(input: string): string {
   // Only a prefix is needed for identification; keeps this O(1) on huge documents
   const text = input.slice(0, 5000);
 
-  if (/[぀-ゟ゠-ヿ]/.test(text)) return 'ja'; // kana before kanji
-  if (/[가-힯ᄀ-ᇿ]/.test(text)) return 'ko';
-  if (/[一-鿿]/.test(text)) return 'zh';
-  if (/[؀-ۿ]/.test(text)) {
+  // Decide by the share of letters in each script, not by the first non-Latin character:
+  // "β-blockers" in English text must not make it Greek, and a "・" must not make Chinese Japanese.
+  const letters = (text.match(/\p{L}/gu) || []).length || 1;
+  const count = (re: RegExp) => (text.match(re) || []).length;
+  const share = (n: number) => n / letters;
+  const kana = count(/[\p{Script=Hiragana}\p{Script=Katakana}]/gu);
+  const han = count(/\p{Script=Han}/gu);
+  // Japanese mixes kana into kanji text; a few kana in Chinese text (names, loanwords) don't count
+  if (share(kana + han) >= 0.3 && kana >= 3 && kana >= (kana + han) * 0.1) return 'ja';
+  if (share(count(/\p{Script=Hangul}/gu)) >= 0.3) return 'ko';
+  if (share(han) >= 0.3) return 'zh';
+  if (share(count(/\p{Script=Arabic}/gu)) >= 0.3) {
     if (/[ٹڈڑںھہے]/.test(text)) return 'ur'; // ٹ ڈ ڑ ں ھ ہ ے
     if (/[پچژگیک]/.test(text)) return 'fa'; // پ چ ژ گ ی ک
     return 'ar';
   }
-  if (/[֐-׿]/.test(text)) return 'he';
-  if (/[ऀ-ॿ]/.test(text)) return /(आहे|आहेत|ळ)/.test(text) ? 'mr' : 'hi';
-  if (/[ঀ-৿]/.test(text)) return 'bn';
-  if (/[਀-੿]/.test(text)) return 'pa';
-  if (/[઀-૿]/.test(text)) return 'gu';
-  if (/[஀-௿]/.test(text)) return 'ta';
-  if (/[ఀ-౿]/.test(text)) return 'te';
-  if (/[฀-๿]/.test(text)) return 'th';
-  if (/[Ͱ-Ͽ]/.test(text)) return 'el';
-  if (/[Ѐ-ӿ]/.test(text)) return /[іїєґ]/i.test(text) ? 'uk' : 'ru';
+  if (share(count(/\p{Script=Hebrew}/gu)) >= 0.3) return 'he';
+  if (share(count(/\p{Script=Devanagari}/gu)) >= 0.3) return /(आहे|आहेत|ळ)/.test(text) ? 'mr' : 'hi';
+  if (share(count(/\p{Script=Bengali}/gu)) >= 0.3) return 'bn';
+  if (share(count(/\p{Script=Gurmukhi}/gu)) >= 0.3) return 'pa';
+  if (share(count(/\p{Script=Gujarati}/gu)) >= 0.3) return 'gu';
+  if (share(count(/\p{Script=Tamil}/gu)) >= 0.3) return 'ta';
+  if (share(count(/\p{Script=Telugu}/gu)) >= 0.3) return 'te';
+  if (share(count(/\p{Script=Thai}/gu)) >= 0.3) return 'th';
+  if (share(count(/\p{Script=Greek}/gu)) >= 0.3) return 'el';
+  if (share(count(/\p{Script=Cyrillic}/gu)) >= 0.3) return /[іїєґ]/i.test(text) ? 'uk' : 'ru';
 
   const words = text.toLowerCase().match(/[\p{L}]+/gu) || [];
   if (words.length === 0) return 'en';

@@ -70,18 +70,47 @@ export interface OffsetEdit {
 export function locateEdit(text: string, edit: OffsetEdit): number {
   if (edit.located !== false && text.slice(edit.start, edit.end) === edit.original) return edit.start;
   if (!edit.original) return -1;
+  // Whole-word matches only: "a" must not match inside "Today", "its" not inside "suits"
+  const isWordChar = (c: string | undefined) => !!c && /[\p{L}\p{N}_]/u.test(c);
+  const needStartBoundary = isWordChar(edit.original[0]);
+  const needEndBoundary = isWordChar(edit.original[edit.original.length - 1]);
   let best = -1;
   let bestDist = Infinity;
   let idx = text.indexOf(edit.original);
   while (idx !== -1) {
+    const okStart = !needStartBoundary || !isWordChar(text[idx - 1]);
+    const okEnd = !needEndBoundary || !isWordChar(text[idx + edit.original.length]);
     const dist = Math.abs(idx - edit.start);
-    if (dist < bestDist) {
+    if (okStart && okEnd && dist < bestDist) {
       best = idx;
       bestDist = dist;
     }
     idx = text.indexOf(edit.original, idx + 1);
   }
   return best;
+}
+
+/**
+ * Re-bases edit offsets after the text changed from `before` to `after` by a user edit (typing, undo,
+ * paste). The changed region is found by common prefix/suffix: edits before it keep their offsets, edits
+ * after it shift by the length change, and edits whose text was overwritten are dropped (no longer valid).
+ */
+export function rebaseEdits<T extends OffsetEdit>(before: string, after: string, edits: T[]): T[] {
+  if (before === after) return edits;
+  let p = 0;
+  const max = Math.min(before.length, after.length);
+  while (p < max && before.charCodeAt(p) === after.charCodeAt(p)) p++;
+  let s = 0;
+  while (s < max - p && before.charCodeAt(before.length - 1 - s) === after.charCodeAt(after.length - 1 - s)) s++;
+  const oldEnd = before.length - s; // changed region in `before` is [p, oldEnd)
+  const delta = after.length - before.length;
+  const out: T[] = [];
+  for (const e of edits) {
+    if (e.end <= p) out.push(e);
+    else if (e.start >= oldEnd) out.push({ ...e, start: e.start + delta, end: e.end + delta });
+    // otherwise the user edited inside this suggestion's text: drop it
+  }
+  return out;
 }
 
 /**

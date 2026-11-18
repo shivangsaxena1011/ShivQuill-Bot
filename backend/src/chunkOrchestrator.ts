@@ -1,4 +1,7 @@
-import { splitParagraphsWithLayout, splitIntoSentences, chunkSentences } from './segmenter.js';
+import { splitParagraphsWithLayout, splitIntoSentences } from './segmenter.js';
+import { splitIntoBatches } from './batching.js';
+import { config } from './config.js';
+import { ProviderError } from './llm.js';
 import { executeLlmCompletion } from './llm.js';
 import { getParaphraseSystemPrompt } from './prompts.js';
 import { ParaphraseMode, SynonymStrength } from './types.js';
@@ -47,6 +50,10 @@ export interface ChunkRecord {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   attempts: number;
   error?: string;
+  /** Exact whitespace that followed this chunk inside its paragraph ('' for the paragraph's last chunk) */
+  after?: string;
+  /** Upstream error status (e.g. 401, 429) when the chunk failed */
+  errorStatus?: number;
 }
 
 export interface DocumentJobProgress {
@@ -98,21 +105,48 @@ export class DocumentProcessingJob {
     this.paragraphSeparators = layout.separators;
     let globalIndex = 0;
 
+    const perChunk = Math.max(1, Math.floor(this.sentencesPerChunk) || 1);
     for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
       const paragraph = paragraphs[pIdx];
-      const sentences = splitIntoSentences(paragraph);
-      const sentenceChunks = chunkSentences(sentences, this.sentencesPerChunk);
-
-      for (let cIdx = 0; cIdx < sentenceChunks.length; cIdx++) {
-        this.chunks.push({
-          id: `chunk-${pIdx}-${cIdx}-${globalIndex++}`,
-          paragraphIndex: pIdx,
-          chunkIndex: cIdx,
-          originalText: sentenceChunks[cIdx].combinedText,
-          status: 'pending',
-          attempts: 0
-        });
+      // Sentence character ranges inside the paragraph, so the exact whitespace between chunks is kept
+      const spans: Array<[number, number]> = [];
+      let pos = 0;
+      for (const sentence of splitIntoSentences(paragraph)) {
+        const at = paragraph.indexOf(sentence, pos);
+        if (at === -1) continue;
+        spans.push([at, at + sentence.length]);
+        pos = at + sentence.length;
       }
+      if (!spans.length) spans.push([0, paragraph.length]);
+      // Anything the segmenter skipped belongs to the neighbouring sentence
+      spans[0][0] = 0;
+      spans[spans.length - 1][1] = paragraph.length;
+
+      const ranges: Array<[number, number]> = [];
+      for (let i = 0; i < spans.length; i += perChunk) ranges.push([spans[i][0], spans[Math.min(spans.length, i + perChunk) - 1][1]]);
+
+      let cIdx = 0;
+      ranges.forEach(([start, end], r) => {
+        const nextStart = r + 1 < ranges.length ? ranges[r + 1][0] : end;
+        const text = paragraph.slice(start, end);
+        const after = paragraph.slice(end, nextStart);
+        // Text without sentence punctuation (transcripts, Thai…) can be one huge "sentence": never send a
+        // chunk larger than one provider request, split it at paragraph/line/word boundaries instead
+        const pieces = text.length > config.maxCharsPerRequest
+          ? splitIntoBatches(text, config.maxCharsPerRequest).batches.map((b, i, all) => ({ text: b.text, after: i === all.length - 1 ? after : b.separator }))
+          : [{ text, after }];
+        for (const piece of pieces) {
+          this.chunks.push({
+            id: `chunk-${pIdx}-${cIdx}-${globalIndex++}`,
+            paragraphIndex: pIdx,
+            chunkIndex: cIdx++,
+            originalText: piece.text,
+            status: 'pending',
+            attempts: 0,
+            after: piece.after
+          });
+        }
+      });
     }
   }
 
@@ -207,13 +241,12 @@ export class DocumentProcessingJob {
             this.synonymStrength,
             this.rollingContext,
             // Only send frozen terms that actually occur in this chunk (keeps prompts short)
-            this.frozenWords.filter(w => w && frozenTermRegex(w, 'iu').test(chunk.originalText))
+            this.frozenWords.filter(w => w && frozenTermRegex(w, 'iu').test(chunk.originalText)),
+            this.customInstruction
           );
 
-          let userPrompt = chunk.originalText;
-          if (this.mode === 'custom' && this.customInstruction) {
-            userPrompt = `User style instruction: "${this.customInstruction}"\n\nText to rewrite:\n${userPrompt}`;
-          }
+          // Only the text to rewrite goes in the user message
+          const userPrompt = chunk.originalText;
 
           const rewritten = await executeLlmCompletion(
             systemPrompt,
@@ -251,6 +284,7 @@ export class DocumentProcessingJob {
           }
 
           chunk.error = err.message || 'Chunk processing failed';
+          if (typeof err.status === 'number') chunk.errorStatus = err.status;
           // Bad key, forbidden, or unknown model: every remaining chunk would fail the same way
           if (typeof err.status === 'number' && [401, 403, 404].includes(err.status)) {
             fatalError = chunk.error || 'AI provider rejected the request';
@@ -297,7 +331,9 @@ export class DocumentProcessingJob {
     if (this.failedChunks > 0 && this.completedChunks === 0) {
       this.status = 'failed';
       this.errorMessage = `All ${this.chunks.length} chunks failed upstream AI processing.`;
-      throw new Error(this.errorMessage);
+      // Keep the provider's status (401 bad key, 429 busy…) so the client gets the right message, not a 500
+      const status = this.chunks.find(c => typeof c.errorStatus === 'number')?.errorStatus;
+      throw new ProviderError(this.errorMessage, { status: status ?? 502 });
     }
 
     this.status = 'completed';
@@ -324,7 +360,7 @@ export class DocumentProcessingJob {
       const chunk = this.chunks[i];
       const next = this.chunks[i + 1];
       const after = next && next.paragraphIndex === chunk.paragraphIndex
-        ? ' '
+        ? (chunk.after ?? ' ')
         : (this.paragraphSeparators[chunk.paragraphIndex] ?? '');
       pairs.push({ original: chunk.originalText, rewritten: chunk.rewrittenText || chunk.originalText, after });
     }
@@ -336,14 +372,16 @@ export class DocumentProcessingJob {
   }
 
   private getParagraphPairs(): Array<{ rewritten: string }> {
-    const paragraphMap = new Map<number, string[]>();
-    for (const chunk of this.chunks) {
-      if (!paragraphMap.has(chunk.paragraphIndex)) paragraphMap.set(chunk.paragraphIndex, []);
-      paragraphMap.get(chunk.paragraphIndex)!.push(chunk.rewrittenText || chunk.originalText);
-    }
+    // Chunks of one paragraph are rejoined with the exact whitespace that separated them originally
+    const paragraphMap = new Map<number, string>();
+    this.chunks.forEach((chunk, i) => {
+      const next = this.chunks[i + 1];
+      const joiner = next && next.paragraphIndex === chunk.paragraphIndex ? (chunk.after ?? ' ') : '';
+      paragraphMap.set(chunk.paragraphIndex, (paragraphMap.get(chunk.paragraphIndex) || '') + (chunk.rewrittenText || chunk.originalText) + joiner);
+    });
     return Array.from(paragraphMap.keys())
       .sort((a, b) => a - b)
-      .map(idx => ({ rewritten: (paragraphMap.get(idx) || []).join(' ') }));
+      .map(idx => ({ rewritten: paragraphMap.get(idx) || '' }));
   }
 }
 
@@ -351,6 +389,8 @@ interface JobEntry {
   job: DocumentProcessingJob;
   registeredAt: number;
   timer: NodeJS.Timeout;
+  /** When the expiry timer first saw the job finished */
+  finishedSeenAt?: number;
 }
 
 /**
@@ -417,7 +457,17 @@ export class DocumentJobRegistry {
         entry.timer = this.scheduleExpiry(job, registeredAt);
         return;
       }
-      if (!isTerminalStatus(job.status)) job.cancel();
+      if (!isTerminalStatus(job.status)) {
+        job.cancel();
+        this.delete(job.id);
+        return;
+      }
+      // Finished since the last check: give the client a full TTL from now to fetch the result
+      if (!entry.finishedSeenAt) {
+        entry.finishedSeenAt = Date.now();
+        entry.timer = this.scheduleExpiry(job, registeredAt);
+        return;
+      }
       this.delete(job.id);
     }, this.ttlMs);
     timer.unref?.();

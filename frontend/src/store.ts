@@ -76,10 +76,13 @@ export async function copyText(text: string) {
       ta.value = text;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
+      const previous = document.activeElement as HTMLElement | null;
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
+      const ok = document.execCommand('copy');
       ta.remove();
+      previous?.focus?.();
+      if (!ok) throw new Error('copy command was refused');
     }
     showToast('Copied to clipboard');
   } catch {
@@ -102,7 +105,12 @@ export function persisted(key: string, initial: string): Ref<string> {
       // Don't store huge documents; they'd slow every page load
       if (r.value.length <= 200_000) localStorage.setItem(`sq:${key}`, r.value);
       else localStorage.removeItem(`sq:${key}`);
-    } catch { /* quota or private mode */ }
+    } catch {
+      // Quota full: drop the old copy rather than leave an outdated draft to reappear after a reload
+      try {
+        localStorage.removeItem(`sq:${key}`);
+      } catch { /* storage unavailable */ }
+    }
   };
   watch(r, () => {
     clearTimeout(timer);

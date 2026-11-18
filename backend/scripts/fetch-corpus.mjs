@@ -123,7 +123,14 @@ async function main() {
     if (!first) await sleep(DELAY_MS);
     first = false;
     console.log(`Fetching ${cat} ...`);
-    const entries = await fetchCategory(cat);
+    let entries = [];
+    try {
+      entries = await fetchCategory(cat);
+    } catch (err) {
+      // One category failing (after its retries) must not throw away everything already fetched
+      console.warn(`  [${cat}] skipped after 3 failed attempts: ${err.message}`);
+      continue;
+    }
     let added = 0;
     for (const e of entries) {
       if (added >= PER_CATEGORY) break;

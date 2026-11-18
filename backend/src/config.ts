@@ -76,7 +76,12 @@ function parseTrustProxy(raw: string | undefined): number {
 
 export const config = {
   env: nodeEnv,
-  port: parseInt(process.env.PORT || '5000', 10),
+  port: (() => {
+    const p = parseInt(process.env.PORT || '5000', 10);
+    return Number.isInteger(p) && p > 0 && p < 65536 ? p : 5000;
+  })(),
+  // Off with false/0/no/off (any case); never online in the test suite
+  plagiarismOnline: !/^(false|0|no|off)$/i.test((process.env.PLAGIARISM_ONLINE || '').trim()) && nodeEnv !== 'test',
   // Comma-separated list of extra allowed origins (the server's own host is always allowed)
   corsOrigins: (process.env.CORS_ORIGIN || '')
     .split(',')

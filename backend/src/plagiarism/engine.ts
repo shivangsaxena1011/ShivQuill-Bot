@@ -58,6 +58,8 @@ export interface ProviderCoverage {
   queried: number;
   results: number;
   message?: string;
+  /** Some of its queries never ran (time limit, cancel, or paused by another scan): coverage is partial */
+  incomplete?: boolean;
 }
 
 export interface PlagiarismReport {
@@ -152,6 +154,8 @@ function normalizeUrl(u: string): string {
     for (const p of [...url.searchParams.keys()]) if (/^(utm_|fbclid|gclid|ref$)/i.test(p)) url.searchParams.delete(p);
     url.hostname = url.hostname.replace(/^www\./, '').replace(/^m\./, '');
     url.protocol = 'https:';
+    // arXiv: /abs/1706.03762v7, /pdf/1706.03762.pdf and /abs/1706.03762 are the same paper
+    if (url.hostname === 'arxiv.org') url.pathname = url.pathname.replace(/^\/(?:abs|pdf)\/(.+?)(?:v\d+)?(?:\.pdf)?$/, '/abs/$1');
     return url.toString().replace(/\/$/, '');
   } catch {
     return u;
@@ -224,6 +228,7 @@ async function runProvider(
   let next = 0;
   let stop = false;
   let answered = 0; // successful (or cached) answers, with or without results
+  let pausedByOtherScan = false;
   let errors = 0;
   const cd = cooldowns.get(p.id);
   const resting = (cd?.until || 0) - Date.now();
@@ -244,7 +249,8 @@ async function runProvider(
         const release = await acquire(p, signal);
         if (!release) return;
         try {
-          if (signal.aborted || stop || (cooldowns.get(p.id)?.until || 0) > Date.now()) return;
+          if ((cooldowns.get(p.id)?.until || 0) > Date.now()) pausedByOtherScan = true;
+          if (signal.aborted || stop || pausedByOtherScan) return;
           cov.queried++;
           results = await p.search(q, { lang, signal });
           searchCache.set(cacheKey, results, results.length ? 6 * 3600_000 : 1800_000);
@@ -300,7 +306,12 @@ async function runProvider(
   // Decided once at the end: one transient error doesn't make the scan "partial" if other queries worked
   cov.status = cov.results > 0 ? 'ok' : answered > 0 ? 'no_results' : errors > 0 ? 'failed' : 'skipped';
   if (cov.status !== 'failed' && errors === 0) cov.message = undefined;
-  if (signal.aborted && answered + errors < queries.length && cov.status !== 'failed') cov.message = 'Search time budget reached';
+  // Queries that never ran make the scan partial, even if the ones that ran found nothing
+  if (cov.status !== 'failed' && answered + errors < queries.length && (signal.aborted || pausedByOtherScan)) {
+    cov.incomplete = true;
+    cov.message = pausedByOtherScan ? 'Paused because it stopped responding or asked us to slow down' : 'Search time limit reached before all phrases were searched';
+    if (answered === 0) cov.status = 'failed';
+  }
 }
 
 async function loadText(cand: Candidate, signal: AbortSignal): Promise<{ text: string; snippetOnly: boolean }> {
@@ -370,7 +381,7 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
   const status = (m: string) => opts.onStatus?.(m);
   const input = prepareInput(text);
   const n = input.tokens.length;
-  const online = opts.online ?? (process.env.PLAGIARISM_ONLINE !== 'false' && config.env !== 'test');
+  const online = opts.online ?? config.plagiarismOnline;
 
   // Optional: words inside quotation marks are not counted as plagiarism
   let excludeMask: Uint8Array | undefined;
@@ -420,6 +431,7 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
     const { signal, dispose } = linkedSignal(opts.signal, FETCH_BUDGET_MS);
     try {
       await mapLimit(toFetch, 6, async f => {
+        if (signal.aborted) return; // time budget spent or client gone: stop fetching
         const loaded = await loadText(f.c, signal);
         if (loaded.text) candidates.push({ c: f.c, ...loaded });
       });
@@ -512,15 +524,18 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
   const similarity = pct(matchedWords, n);
   const [identicalPct, minorPct, paraPct] = splitPercent([identical, minor, para], similarity);
 
-  const failed = coverage.filter(c => c.status === 'rate_limited' || c.status === 'blocked' || c.status === 'failed');
+  const failed = coverage.filter(c => c.status === 'rate_limited' || c.status === 'blocked' || c.status === 'failed' || c.incomplete);
+  const why = (c: ProviderCoverage) => (c.incomplete ? (c.message?.startsWith('Paused') ? 'paused' : 'time limit') : c.status.replace('_', ' '));
   const searched = coverage.filter(c => c.status === 'ok' || c.status === 'no_results').map(c => c.label);
   const note = !online
     ? 'Online search is turned off on this server; only the local reference library was checked.'
     : queries.length === 0
       ? 'Text is too short for a web search; only the local reference library was checked.'
       : failed.length
-        ? `Partial scan: ${failed.map(f => `${f.label} (${f.status.replace('_', ' ')})`).join(', ')} could not be searched. Results may miss some sources.`
-        : `Searched ${searched.join(', ')} and the local reference library.`;
+        ? `Partial scan: ${failed.map(f => `${f.label} (${why(f)})`).join(', ')} could not be fully searched. Results may miss some sources.`
+        : searched.length
+          ? `Searched ${searched.join(', ')} and the local reference library.`
+          : 'Only the local reference library could be searched.';
 
   return {
     similarityScore: similarity,

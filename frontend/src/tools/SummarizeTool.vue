@@ -61,7 +61,7 @@ import ExportMenu from '../components/ExportMenu.vue';
 import { api, type SummarizeResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { useLiveText } from '../composables/useLiveText';
-import { copyText, useToolInput } from '../store';
+import { copyText, showToast, useToolInput } from '../store';
 import { addHistory } from '../lib/db';
 
 const lengths = ['short', 'medium', 'long'] as const;
@@ -78,12 +78,14 @@ async function run() {
   if (!input.value.trim() || req.loading.value) return;
   live.reset();
   const text = input.value;
+  const runLength = length.value; // the options may change while the request runs
   const r = await req.run(signal =>
-    api.summarize(text, format.value, length.value, { signal, onDelta: live.append, onStatus: m => (live.status.value = m) })
+    api.summarize(text, format.value, runLength, { signal, onDelta: live.append, onStatus: m => (live.status.value = m) })
   );
+  if (r && input.value !== text) return showToast('Your text changed while this was running — run it again');
   if (r) {
     result.value = r;
-    addHistory({ tool: 'summarize', label: `Summary · ${length.value}`, input: text, output: r.summary });
+    addHistory({ tool: 'summarize', label: `Summary · ${runLength}`, input: text, output: r.summary });
   }
 }
 </script>

@@ -175,7 +175,7 @@ export const arxivProvider: SearchProvider = {
       const authors = [...entry.matchAll(/<name>([\s\S]*?)<\/name>/g)].map(m => stripTags(m[1])).slice(0, 4);
       const title = get('title');
       return {
-        url: get('id').replace(/^http:/, 'https:'),
+        url: get('id').replace(/^http:/, 'https:').replace(/v\d+$/, ''), // version-less, like the library's links
         title,
         authorOrSource: `${authors.join(', ')}${authors.length ? ' · ' : ''}arXiv`,
         kind: 'academic' as const,

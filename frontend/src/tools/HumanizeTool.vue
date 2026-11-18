@@ -57,7 +57,7 @@ import ExportMenu from '../components/ExportMenu.vue';
 import { api, type HumanizeResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { useLiveText } from '../composables/useLiveText';
-import { copyText, useToolInput } from '../store';
+import { copyText, showToast, useToolInput } from '../store';
 import { addHistory } from '../lib/db';
 
 const levels = [
@@ -77,10 +77,12 @@ async function run() {
   if (!input.value.trim() || req.loading.value) return;
   live.reset();
   const text = input.value;
-  const r = await req.run(signal => api.humanize(text, level.value, { signal, onDelta: live.append }));
+  const runLevel = level.value; // the option may change while the request runs
+  const r = await req.run(signal => api.humanize(text, runLevel, { signal, onDelta: live.append }));
+  if (r && input.value !== text) return showToast('Your text changed while this was running — run it again');
   if (r) {
     result.value = r;
-    addHistory({ tool: 'humanize', label: `Humanize · ${level.value}`, input: text, output: r.humanizedText });
+    addHistory({ tool: 'humanize', label: `Humanize · ${runLevel}`, input: text, output: r.humanizedText });
   }
 }
 </script>

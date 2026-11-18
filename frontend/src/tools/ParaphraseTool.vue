@@ -268,6 +268,8 @@ async function runSingle() {
   const runMode = mode.value;
   const runInput = input.value;
   const final = await req.run(signal => runJob(runMode, signal, p => (progress.value = p)));
+  // The text was replaced while the job ran (e.g. a Library load): don't show a result for other text
+  if (final && input.value !== runInput) return showToast('Your text changed while this was running — run it again');
   if (final) {
     result.value = final;
     output.value = final.paraphrasedText;

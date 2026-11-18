@@ -27,6 +27,7 @@
 import { nextTick, ref, watch } from 'vue';
 import { X } from 'lucide-vue-next';
 import { workspace } from '../store';
+import { useFocusTrap } from '../composables/useFocusTrap';
 
 defineProps<{ tools: { id: string; name: string }[] }>();
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
@@ -34,6 +35,7 @@ const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 // Move focus into the dialog on open and restore it on close
 const dialog = ref<HTMLElement | null>(null);
 const closeBtn = ref<HTMLButtonElement | null>(null);
+useFocusTrap(dialog, () => workspace.shortcutsOpen);
 let returnFocus: HTMLElement | null = null;
 watch(() => workspace.shortcutsOpen, open => {
   if (open) {

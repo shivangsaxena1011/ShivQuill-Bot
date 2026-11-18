@@ -67,6 +67,11 @@ export function isPublicIp(ip: string): boolean {
     const embeddedV4 = () => `${h[6] >> 8}.${h[6] & 255}.${h[7] >> 8}.${h[7] & 255}`;
     // IPv4-mapped (::ffff:a.b.c.d) and NAT64 (64:ff9b::/96) addresses carry an IPv4 address: judge that one
     if (h.slice(0, 5).every(x => x === 0) && h[5] === 0xffff) return isPublicIp(embeddedV4());
+    // IPv4-compatible ::a.b.c.d (deprecated) and SIIT ::ffff:0:a.b.c.d also carry an IPv4 address
+    if (h.slice(0, 6).every(x => x === 0) && (h[6] || h[7] > 1)) return isPublicIp(embeddedV4());
+    if (h.slice(0, 4).every(x => x === 0) && h[4] === 0xffff && h[5] === 0) return isPublicIp(embeddedV4());
+    // 6to4 2002:AABB:CCDD::/48 embeds AA.BB.CC.DD
+    if (h[0] === 0x2002) return isPublicIp(`${h[1] >> 8}.${h[1] & 255}.${h[2] >> 8}.${h[2] & 255}`);
     if (h[0] === 0x64 && h[1] === 0xff9b && h.slice(2, 6).every(x => x === 0)) return isPublicIp(embeddedV4());
     if (h.every(x => x === 0)) return false; // ::
     if (h.slice(0, 7).every(x => x === 0) && h[7] === 1) return false; // ::1
@@ -132,6 +137,8 @@ export function assertFetchableUrl(raw: string, trusted = false): URL {
 
 function requestOnce(u: URL, opts: SafeFetchOptions, deadline: number): Promise<{ res: http.IncomingMessage; body: Buffer }> {
   return new Promise((resolve, reject) => {
+    // Already cancelled (scan aborted or time budget spent): don't even open a socket
+    if (opts.signal?.aborted) return reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
     const lib = u.protocol === 'https:' ? https : http;
     const maxBytes = opts.maxBytes ?? 2_000_000;
     let settled = false;
@@ -206,12 +213,14 @@ function requestOnce(u: URL, opts: SafeFetchOptions, deadline: number): Promise<
         stream.on('error', fail);
       }
     );
+    // Listeners first: destroying a request without an 'error' listener throws an uncaught
+    // "socket hang up" that takes the whole server down
+    req.on('timeout', () => fail(new Error('Request timed out')));
+    req.on('error', fail);
     if (opts.signal) {
       if (opts.signal.aborted) return onAbort();
       opts.signal.addEventListener('abort', onAbort, { once: true });
     }
-    req.on('timeout', () => fail(new Error('Request timed out')));
-    req.on('error', fail);
     if (opts.body) req.write(opts.body);
     req.end();
   });

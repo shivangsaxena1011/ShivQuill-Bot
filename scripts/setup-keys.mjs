@@ -39,14 +39,21 @@ function readEnv() {
   const text = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf8') : '';
   const values = {};
   for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m) values[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+    // Same rules as dotenv: optional "export ", quoted values kept verbatim, " #comment" after unquoted values
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!m) continue;
+    const raw = m[2];
+    const q = raw.match(/^(['"`])([\s\S]*?)\1(\s+#.*)?$/);
+    values[m[1]] = q ? q[2] : raw.replace(/\s+#.*$/, '');
   }
   return { text, values };
 }
 
+/** dotenv has no escapes: quote with a quote character the value doesn't contain. */
 function quote(v) {
-  return /[\s#"'=]/.test(v) ? `"${v.replace(/"/g, '\\"')}"` : v;
+  if (!/[\s#"'`=]/.test(v)) return v;
+  for (const q of ["'", '"', '`']) if (!v.includes(q)) return `${q}${v}${q}`;
+  throw new Error('That value contains every kind of quote character and cannot be stored safely in .env.');
 }
 
 /** Updates/adds/removes KEY=value lines, keeping every other line (and comments) untouched. */
@@ -56,7 +63,7 @@ function writeEnv(originalText, changes) {
   const done = new Set();
   const out = [];
   for (const line of lines) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=/);
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z0-9_]+)\s*=/);
     if (m && m[1] in changes) {
       done.add(m[1]);
       if (changes[m[1]] !== null) out.push(`${m[1]}=${quote(changes[m[1]])}`);
@@ -94,7 +101,8 @@ function printStatus(values) {
 
 // ---------------------------------------------------------------------------------------------
 const isTTY = Boolean(process.stdin.isTTY);
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: isTTY });
+// historySize 0: otherwise pressing Up at a later prompt would show a key typed earlier, in plain text
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: isTTY, historySize: 0 });
 let muted = false;
 let currentPrompt = '';
 const origWrite = rl._writeToOutput?.bind(rl) ?? (s => process.stdout.write(s));
@@ -131,8 +139,15 @@ const ask = (q, { secret = false } = {}) =>
     else waiter = done;
   });
 
+let warnedVisible = false;
 async function askValue(label, current, { secret, help, fallback } = {}) {
   if (help) console.log(`    ${help}`);
+  if (secret && !isTTY && !warnedVisible && process.stdout.isTTY) {
+    // e.g. Git Bash (mintty) gives Node a non-TTY stdin, so typing can't be hidden there
+    warnedVisible = true;
+    console.log('    ⚠ This terminal cannot hide what you type, so keys will be visible on screen.');
+    console.log('      For hidden input, run it from PowerShell or Windows Terminal, or with: winpty npm run setup:keys');
+  }
   const shown = secret ? mask(current) : current || (fallback ? `default ${fallback}` : 'not set');
   const answer = await ask(`  ${label} [${shown}] (Enter = keep, "-" = clear): `, { secret });
   if (answer === '') return undefined;

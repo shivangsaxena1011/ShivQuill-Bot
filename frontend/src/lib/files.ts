@@ -19,7 +19,19 @@ export async function importFile(file: File): Promise<string> {
   if (name.endsWith('.doc') || name.endsWith('.pdf')) {
     throw new Error('Please convert the file to .docx or .txt first (old .doc and PDF files are not supported).');
   }
-  return normalize(await file.text());
+  return normalize(decodeText(new Uint8Array(await file.arrayBuffer())));
+}
+
+/** Decodes a text file: UTF-8/UTF-16 by BOM, strict UTF-8, else Windows-1252 (Notepad "ANSI"). */
+export function decodeText(bytes: Uint8Array): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
 }
 
 function normalize(text: string): string {
@@ -29,7 +41,8 @@ function normalize(text: string): string {
 export type ExportFormat = 'txt' | 'md' | 'docx' | 'pdf';
 
 function safeName(base: string): string {
-  return (base || 'shivquill').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'shivquill';
+  // Keep letters in any script ("Résumé", Hindi, Chinese…); drop characters that are invalid in filenames
+  return (base || 'shivquill').replace(/[^\p{L}\p{M}\p{N}\- ]+/gu, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'shivquill';
 }
 
 function download(blob: Blob, filename: string) {

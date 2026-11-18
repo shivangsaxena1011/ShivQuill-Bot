@@ -165,3 +165,37 @@ describe('analysisWordCount (matches the server tokenizer)', () => {
     expect(analysisWordCount(zh)).toBeGreaterThan(10);
   });
 });
+
+describe('grammar fixes after edits (round 3)', () => {
+  it('fallback search matches whole words only', async () => {
+    const { locateEdit } = await import('./text');
+    // stored offset 6 no longer matches after "Today " was typed at the start
+    const edit = { id: '1', start: 6, end: 7, original: 'a', replacement: 'an' };
+    const text = 'Today I saw a apple';
+    expect(locateEdit(text, edit)).toBe(12);
+  });
+
+  it('rebases offsets after the user edits, and drops edited-over items', async () => {
+    const { rebaseEdits } = await import('./text');
+    const before = 'I saw a apple and teh car';
+    const items = [
+      { id: 'a', start: 6, end: 7, original: 'a', replacement: 'an' },
+      { id: 'teh', start: 18, end: 21, original: 'teh', replacement: 'the' }
+    ];
+    const typedAtStart = rebaseEdits(before, 'Today ' + before, items);
+    expect(typedAtStart.map(i => i.start)).toEqual([12, 24]);
+    const editedOver = rebaseEdits(before, 'I saw a apple and the car', items);
+    expect(editedOver.map(i => i.id)).toEqual(['a']);
+  });
+});
+
+describe('text file import encodings', () => {
+  it('decodes UTF-16 (Notepad "Unicode") and Windows-1252 (ANSI) files', async () => {
+    const { decodeText } = await import('./files');
+    const utf16 = new Uint8Array([0xff, 0xfe, 0x48, 0x00, 0xe9, 0x00]); // BOM + "Hé"
+    expect(decodeText(utf16)).toBe('Hé');
+    const ansi = new Uint8Array([0x43, 0x61, 0x66, 0xe9]); // "Café" in Windows-1252
+    expect(decodeText(ansi)).toBe('Café');
+    expect(decodeText(new TextEncoder().encode('naïve ✓'))).toBe('naïve ✓');
+  });
+});
