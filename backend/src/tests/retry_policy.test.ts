@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 const executeLlmCompletion = vi.fn();
 
-vi.mock('../llm.js', () => ({
+vi.mock('../llm.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../llm.js')>()),
   executeLlmCompletion: (...args: unknown[]) => executeLlmCompletion(...args)
 }));
 

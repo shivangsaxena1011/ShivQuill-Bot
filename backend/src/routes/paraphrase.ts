@@ -37,7 +37,8 @@ function extractInvariantEntities(text: string): string[] {
   for (const c of citationMatches) entities.add(c.trim());
 
   // 2. Numerical figures, percentages, currencies, measurements
-  const numberMatches = text.match(/\b\$?\d+(?:\.\d+)?%?(?:\s*(?:km\/h|kg|mg|meters|miles|years|ms|seconds))?\b/gi) || [];
+  // No \b around $ and %: a word boundary can't sit before "$" or after "%", so they were never captured
+  const numberMatches = text.match(/(?<![\w.])\$?\d+(?:[.,]\d+)?(?:%|\b(?:\s*(?:km\/h|kg|mg|meters|miles|years|ms|seconds)\b)?)/gi) || [];
   for (const n of numberMatches) {
     if (n.trim().length > 0) entities.add(n.trim());
   }

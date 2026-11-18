@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Check, Lightbulb, SpellCheck, Square } from 'lucide-vue-next';
 import EditorPane from '../components/EditorPane.vue';
 import StatusBits from '../components/StatusBits.vue';
@@ -87,7 +87,7 @@ import { api } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { showToast, useToolInput } from '../store';
 import { addHistory } from '../lib/db';
-import { applyAllEdits, applyEdit, locateEdit, type OffsetEdit } from '../lib/text';
+import { applyAllEdits, applyEdit, locateEdit, rebaseEdits, type OffsetEdit } from '../lib/text';
 
 const props = defineProps<{ kind: 'grammar' | 'suggestions' }>();
 
@@ -116,8 +116,26 @@ const summary = ref('');
 const editor = ref<InstanceType<typeof EditorPane> | null>(null);
 const req = useRequest();
 
-const isApplicable = (item: Item) => locateEdit(input.value, item) !== -1;
+// Where each item currently is in the text (computed once per change, not per item per render)
+const positions = computed(() => {
+  const map = new Map<string, number>();
+  for (const item of items.value || []) map.set(item.id, locateEdit(input.value, item));
+  return map;
+});
+const isApplicable = (item: Item) => (positions.value.get(item.id) ?? -1) !== -1;
 const applicableCount = computed(() => (items.value || []).filter(isApplicable).length);
+
+// Keep item offsets in step with the user's own edits (typing, undo, paste, loading another document):
+// items after the edit shift, items whose text was edited over are dropped. Changes made by
+// Apply / Apply all already shift the remaining items themselves.
+let selfEdit = false;
+watch(input, (now, before) => {
+  if (selfEdit) {
+    selfEdit = false;
+    return;
+  }
+  if (items.value) items.value = rebaseEdits(before, now, items.value);
+});
 
 function badgeClass(label: string) {
   return { spelling: 'bad', grammar: 'bad', punctuation: 'warn', style: 'brand' }[label] || 'brand';
@@ -140,6 +158,11 @@ async function run() {
       items: r.suggestions.map(s => ({ id: s.id, start: s.start, end: s.end, original: s.originalText, replacement: s.suggestedText, located: s.located, label: s.type, explanation: s.explanation }))
     };
   });
+  // The text changed while the check was running: these results describe the old text
+  if (res && input.value !== text) {
+    showToast('Your text changed during the check — run it again');
+    return;
+  }
   if (res) {
     // Drop no-op items (model sometimes "corrects" text to itself)
     items.value = res.items.filter(i => i.original !== i.replacement);
@@ -154,13 +177,14 @@ async function run() {
 }
 
 function preview(item: Item) {
-  const at = locateEdit(input.value, item);
+  const at = positions.value.get(item.id) ?? -1;
   if (at !== -1) editor.value?.select(at, at + item.original.length);
 }
 
 function accept(item: Item) {
   if (!items.value) return;
   const r = applyEdit(input.value, item, items.value);
+  if (r.text !== input.value) selfEdit = true;
   input.value = r.text;
   items.value = r.remaining;
   if (!r.applied) showToast('That text has changed — skipped');
@@ -173,6 +197,7 @@ function dismiss(item: Item) {
 function applyAll() {
   if (!items.value) return;
   const r = applyAllEdits(input.value, items.value);
+  if (r.text !== input.value) selfEdit = true;
   input.value = r.text;
   items.value = items.value.filter(i => !r.appliedIds.has(i.id));
   showToast(`Applied ${r.appliedIds.size} change${r.appliedIds.size === 1 ? '' : 's'}`);

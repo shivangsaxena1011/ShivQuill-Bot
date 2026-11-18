@@ -32,7 +32,9 @@ async function summarizeLarge(
   stream: SseChannel | null = null
 ): Promise<string> {
   const limit = config.maxCharsPerRequest;
-  const mapPrompt = getSummarizeSystemPrompt('paragraph', 'long');
+  // 'medium' (not 'long', ~55% of the input) so big documents shrink below the limit within the pass cap
+  // instead of being cut off at the end
+  const mapPrompt = getSummarizeSystemPrompt('paragraph', 'medium');
   let working = text;
   // Each pass shrinks the text substantially; cap passes defensively
   for (let pass = 0; pass < 5 && working.length > limit; pass++) {

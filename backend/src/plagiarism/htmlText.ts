@@ -94,9 +94,10 @@ export function htmlToText(html: string): { title: string; text: string } {
   // Prefer the main content container when it holds most of the text
   const main = mainContent(body);
   if (main) {
-    const mainText = toText(stripBlocks(main, ['nav', 'aside', 'form', 'footer']));
+    // Not <form>: ASP.NET-style sites wrap the whole page in one, so only form controls are dropped
+    const mainText = toText(stripBlocks(main, ['nav', 'aside', 'footer', 'select', 'textarea', 'button']));
     if (mainText.length > 400) return { title, text: mainText };
   }
-  const text = toText(stripBlocks(body, ['nav', 'footer', 'header', 'aside', 'form']));
+  const text = toText(stripBlocks(body, ['nav', 'footer', 'header', 'aside', 'select', 'textarea', 'button']));
   return { title, text };
 }

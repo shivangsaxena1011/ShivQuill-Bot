@@ -138,8 +138,9 @@ export async function listHistory(): Promise<HistoryEntry[]> {
   return all.sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/** Throws when the delete fails, so the UI doesn't hide an entry that is still stored. */
 export async function deleteHistory(id: string): Promise<void> {
-  await run('history', 'readwrite', s => s.delete(id));
+  await exec('history', 'readwrite', s => s.delete(id));
 }
 
 export async function clearHistory(): Promise<void> {
@@ -166,6 +167,7 @@ export async function listDocuments(): Promise<SavedDocument[]> {
   return all.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/** Throws when the delete fails, so the UI doesn't hide a document that is still stored. */
 export async function deleteDocument(id: string): Promise<void> {
-  await run('documents', 'readwrite', s => s.delete(id));
+  await exec('documents', 'readwrite', s => s.delete(id));
 }

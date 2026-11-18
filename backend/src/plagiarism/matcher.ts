@@ -194,15 +194,42 @@ export function compareWithSource(input: PreparedInput, sourceText: string, excl
         }
       }
       if (bestIdx >= 0 && bestDice >= 0.6) {
-        for (let t = s.t0; t < s.t1; t++) mask[t] = Math.max(mask[t], 1);
         const bs = bSentences[bestIdx];
-        passages.push({ t0: s.t0, t1: s.t1, type: 'paraphrased', sourceExcerpt: excerpt(sourceText, B, bs.t0, bs.t1) });
+        const src = excerpt(sourceText, B, bs.t0, bs.t1);
+        // Only the words not already inside an identical/minor passage: passages of one source never overlap
+        let t = s.t0;
+        while (t < s.t1) {
+          if (mask[t]) {
+            t++;
+            continue;
+          }
+          const r0 = t;
+          while (t < s.t1 && !mask[t]) t++;
+          for (let k = r0; k < t; k++) mask[k] = 1;
+          passages.push({ t0: r0, t1: t, type: 'paraphrased', sourceExcerpt: src });
+        }
       }
     });
   }
 
   if (excludeMask) {
     for (let t = 0; t < n; t++) if (excludeMask[t]) mask[t] = 0;
+    // Cut passages around excluded (quoted) words so quotes are never highlighted
+    const split: MatchedPassage[] = [];
+    for (const p of passages) {
+      let t = p.t0;
+      while (t < p.t1) {
+        if (excludeMask[t]) {
+          t++;
+          continue;
+        }
+        const r0 = t;
+        while (t < p.t1 && !excludeMask[t]) t++;
+        split.push({ ...p, t0: r0, t1: t });
+      }
+    }
+    passages.length = 0;
+    passages.push(...split);
   }
   passages.sort((a, b) => a.t0 - b.t0);
   return { passages, mask };

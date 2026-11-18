@@ -4,7 +4,7 @@
  * - Pages use network-first, falling back to the cached copy when offline.
  * - API calls (/api/*) are never cached.
  */
-const CACHE = 'shivquill-v3';
+const CACHE = 'shivquill-v4';
 const ASSET_CACHE = 'shivquill-assets-v1';
 const MAX_ASSETS = 80; // roughly two releases' worth of chunks
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png', '/logo.jpg'];
@@ -60,8 +60,9 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(req)
         .then(res => {
-          // Never let a 404/500 page replace the cached app shell
-          if (res.ok) {
+          // Only an HTML page may become the cached app shell (not a 404/500, and not an image or JSON
+          // file opened directly in a tab, e.g. "Open image in new tab" on the logo)
+          if (res.ok && (res.headers.get('content-type') || '').includes('text/html')) {
             const copy = res.clone();
             caches.open(CACHE).then(cache => cache.put('/', copy)).catch(() => undefined);
           }

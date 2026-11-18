@@ -119,7 +119,9 @@
 
     <ChatDrawer />
     <ShortcutsDialog :tools="allTools" />
-    <Transition name="fade"><div v-if="toast" class="toast" role="status">{{ toast }}</div></Transition>
+    <Transition name="fade"><div v-if="toast" class="toast" aria-hidden="true">{{ toast }}</div></Transition>
+    <!-- Always present, so screen readers announce each new message ("Copied", errors…) -->
+    <div class="sr-only" role="status" aria-live="polite">{{ toast }}</div>
   </div>
 </template>
 
@@ -249,7 +251,7 @@ function onGlobalKey(e: KeyboardEvent) {
   } else if (mod && e.key === '/') {
     e.preventDefault();
     workspace.chatOpen = !workspace.chatOpen;
-  } else if (e.key === 'Escape') {
+  } else if (e.key === 'Escape' && !e.isComposing) {
     if (workspace.shortcutsOpen) workspace.shortcutsOpen = false;
     else if (workspace.chatOpen) workspace.chatOpen = false;
   } else if (e.key === '?' && !isTyping(e)) {

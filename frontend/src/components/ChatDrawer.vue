@@ -3,7 +3,7 @@
     <div v-if="workspace.chatOpen" class="drawer-backdrop" @click="workspace.chatOpen = false"></div>
   </Transition>
   <Transition name="drawer">
-    <aside v-if="workspace.chatOpen" ref="drawer" class="drawer" role="dialog" aria-label="Writing assistant chat" tabindex="-1">
+    <aside v-if="workspace.chatOpen" ref="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Writing assistant chat" tabindex="-1">
       <div class="pane-head">
         <div class="row"><Bot :size="18" /><strong>Writing assistant</strong></div>
         <div class="row">
@@ -51,6 +51,7 @@ import { api, type ChatTurn } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { useLiveText } from '../composables/useLiveText';
 import { workspace } from '../store';
+import { useFocusTrap } from '../composables/useFocusTrap';
 
 const greeting: ChatTurn = { role: 'assistant', content: 'Hi! I can brainstorm, critique tone and clarity, or suggest better transitions. Ask me anything about your text.' };
 const messages = ref<ChatTurn[]>([greeting]);
@@ -58,6 +59,7 @@ const draft = ref('');
 const useContext = ref(true);
 const log = ref<HTMLElement | null>(null);
 const drawer = ref<HTMLElement | null>(null);
+useFocusTrap(drawer, () => workspace.chatOpen);
 const inputEl = ref<HTMLTextAreaElement | null>(null);
 const MAX_TURN_CHARS = 20_000; // server maximum per message
 const req = useRequest();

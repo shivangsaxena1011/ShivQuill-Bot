@@ -252,8 +252,10 @@ export async function streamPost<T>(path: string, body: unknown, h: StreamHandle
 
   const type = res.headers.get('content-type') || '';
   if (!type.includes('text/event-stream')) {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new HttpError(res.status, backendMessage(res.status, data) || `Request failed (${res.status}).`);
+    const data = await res.json().catch(() => undefined);
+    if (!res.ok) throw new HttpError(res.status, backendMessage(res.status, data || {}) || `Request failed (${res.status}).`);
+    // A 200 that isn't JSON (e.g. a proxy serving the HTML app page) must not be rendered as a result
+    if (!data || typeof data !== 'object') throw new Error('The server sent a response that could not be read. Please try again.');
     return data as T;
   }
 

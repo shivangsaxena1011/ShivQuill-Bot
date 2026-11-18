@@ -74,7 +74,7 @@ import ExportMenu from '../components/ExportMenu.vue';
 import { api, type ToneAnalysis, type ToneRewriteResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { useLiveText } from '../composables/useLiveText';
-import { copyText, useToolInput } from '../store';
+import { copyText, showToast, useToolInput } from '../store';
 import { addHistory } from '../lib/db';
 
 const sample = "Hey, just checking if you got my last email?? We really need this done by Friday or we're gonna have a problem.";
@@ -101,7 +101,10 @@ const sentimentClass = computed(() => ({ positive: 'ok', negative: 'bad', mixed:
 
 async function analyze() {
   if (input.value.trim().length < 20 || analyzeReq.loading.value) return;
-  const r = await analyzeReq.run(signal => api.toneAnalyze(input.value, { signal }));
+  const text = input.value;
+  const r = await analyzeReq.run(signal => api.toneAnalyze(text, { signal }));
+  // Results for text that has since been replaced (e.g. a Library load) would be misleading
+  if (r && input.value !== text) return showToast('Your text changed while this was running — run it again');
   if (r) analysis.value = r;
 }
 
@@ -111,6 +114,7 @@ async function rewriteTo(tone: string) {
   live.reset();
   const text = input.value;
   const r = await rewriteReq.run(signal => api.toneRewrite(text, tone, { signal, onDelta: live.append }));
+  if (r && input.value !== text) return showToast('Your text changed while this was running — run it again');
   if (r) {
     rewrite.value = r;
     addHistory({ tool: 'tone', label: `Tone → ${tone}`, input: text, output: r.rewrittenText });

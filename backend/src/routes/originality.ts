@@ -4,7 +4,15 @@ import crypto from 'crypto';
 import { config } from '../config.js';
 import { CitationResponse } from '../types.js';
 import { defaultCorpusManager } from '../corpus.js';
-import { formatCitation, parseAuthorName, CitationSource, CitationAuthor } from '../citation.js';
+import { formatCitation, parseAuthorName, normalizeDoi, CitationSource, CitationAuthor } from '../citation.js';
+import { decodeEntities } from '../plagiarism/htmlText.js';
+
+/** Crossref titles often carry JATS/HTML markup (<i>E. coli</i>, <sub>2</sub>, &amp;): keep the text, italics as *…* */
+const cleanCrossrefText = (s: string) =>
+  decodeEntities(String(s).replace(/<\/?(?:i|em|jats:italic)\b[^<>]*>/gi, '*').replace(/<[^<>]*>/g, ''))
+    .replace(/\*{2,}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 import { scanForPlagiarism } from '../plagiarism/engine.js';
 import { detectAiText, MIN_WORDS } from '../aiDetector.js';
 import { countWords } from '../plagiarism/text.js';
@@ -206,9 +214,8 @@ const citationSchema = z.object({
  * Attempts real DOI metadata resolution via Crossref REST API
  */
 async function fetchCrossrefMetadata(doiQuery: string): Promise<any | null> {
-  const cleanDoi = doiQuery
-    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
-    .trim();
+  // Handles "doi:10…", "DOI 10…", " https://www.doi.org/10…", dx.doi.org …
+  const cleanDoi = normalizeDoi(doiQuery) || '';
 
   if (!cleanDoi.match(/^10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+$/)) {
     return null;
@@ -298,10 +305,14 @@ originalityRouter.post('/citation', async (req: Request, res: Response) => {
       if (meta) {
         isVerified = true;
         sourceOrigin = 'crossref_doi';
-        if (meta.title?.[0]) source.title = meta.title[0];
+        if (meta.title?.[0]) {
+          const subtitle = meta.subtitle?.[0] ? cleanCrossrefText(meta.subtitle[0]) : '';
+          source.title = [cleanCrossrefText(meta.title[0]), subtitle].filter(Boolean).join(': ');
+        }
         if (Array.isArray(meta.author) && meta.author.length > 0) {
           source.authors = meta.author
-            .map((a: any) => (a.family ? { family: a.family, given: a.given || '' } : a.name ? parseAuthorName(a.name) : null))
+            // {name: "World Health Organization"} is an organisation: keep it whole, don't split into initials
+            .map((a: any) => (a.family ? { family: a.family, given: a.given || '', ...(a.suffix ? { suffix: a.suffix } : {}) } : a.name ? { family: String(a.name).trim(), given: '' } : null))
             .filter(Boolean);
         }
         const year = meta.issued?.['date-parts']?.[0]?.[0] || meta.published?.['date-parts']?.[0]?.[0];
@@ -341,7 +352,7 @@ originalityRouter.post('/citation', async (req: Request, res: Response) => {
         const year = String(book.publish_date || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/);
         if (year) source.year = year[1];
         if (book.publishers?.[0]?.name) source.publisher = book.publishers[0].name;
-        if (book.url) source.url = book.url;
+        // book.url is OpenLibrary's catalogue page, not the book: print citations shouldn't end with it
         retrievedMetadata = { publisher: source.publisher, publishedDate: source.year };
       }
     }

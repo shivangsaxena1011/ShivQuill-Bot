@@ -174,7 +174,13 @@ watch(result, () => {
 });
 
 // Counted like the server does (so the button agrees with the backend, incl. Chinese/Japanese/Thai)
-const words = computed(() => analysisWordCount(input.value));
+// Debounced so typing in a very long text doesn't re-count every keystroke
+const words = ref(analysisWordCount(input.value));
+let countTimer: ReturnType<typeof setTimeout> | undefined;
+watch(input, v => {
+  clearTimeout(countTimer);
+  countTimer = setTimeout(() => (words.value = analysisWordCount(v)), 150);
+});
 
 /**
  * Non-overlapping highlight pieces; where sources overlap, the selected source wins, then the
