@@ -30,7 +30,7 @@ const rawSuggestionSchema = z.object({
 });
 
 /** Keeps the usable suggestions and drops malformed ones instead of failing the whole batch. */
-const suggestionList = z.array(z.unknown()).transform(items =>
+const suggestionList = z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.unknown())).transform(items =>
   items.flatMap(item => {
     const r = rawSuggestionSchema.safeParse(item);
     return r.success && r.data.originalText ? [r.data] : [];

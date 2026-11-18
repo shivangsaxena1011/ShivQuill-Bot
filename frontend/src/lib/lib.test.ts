@@ -127,3 +127,26 @@ describe('export italics', () => {
     expect(parts('In *Nature*.', true)).toEqual([{ text: 'In ', italic: false }, { text: 'Nature', italic: true }, { text: '.', italic: false }]);
   });
 });
+
+describe('audit round 3 fixes', () => {
+  it('does not split sentences at decimals, abbreviations or initials', () => {
+    const s = splitSentences('Revenue grew 3.5% in the U.S. last year, e.g. in Texas. Dr. Smith agreed.');
+    expect(s.map(x => x.text)).toEqual([
+      'Revenue grew 3.5% in the U.S. last year, e.g. in Texas.',
+      'Dr. Smith agreed.'
+    ]);
+    expect(s[1].start).toBe('Revenue grew 3.5% in the U.S. last year, e.g. in Texas. '.length);
+  });
+
+  it('still splits ordinary sentences and lines', () => {
+    expect(splitSentences('One here. Two here! Three?\nFour').map(x => x.text)).toEqual(['One here.', 'Two here!', 'Three?', 'Four']);
+  });
+
+  it('highlights the non-overlapping tail of overlapping ranges', () => {
+    const text = 'a'.repeat(120);
+    const parts = highlightRanges(text, [{ start: 0, end: 50 }, { start: 10, end: 120 }]);
+    const marked = parts.filter(p => p.mark).reduce((n, p) => n + p.text.length, 0);
+    expect(marked).toBe(120);
+    expect(parts.map(p => p.text).join('')).toBe(text);
+  });
+});

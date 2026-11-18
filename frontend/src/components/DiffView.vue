@@ -49,7 +49,8 @@ const plainText = computed(() => spans.value.filter(s => s.type !== 'removed').m
 
 function options(span: DiffSpan): string[] {
   const core = span.value.trim();
-  const list = [core, ...(span.alternatives || [])].map(s => s.trim()).filter(Boolean);
+  // Stable order (alternatives first, current word appended if missing) so clicking cycles through every option
+  const list = [...(span.alternatives || []), core].map(s => s.trim()).filter(Boolean);
   return Array.from(new Set(list.map(s => s.toLowerCase()))).map(lower => list.find(s => s.toLowerCase() === lower)!);
 }
 
@@ -64,6 +65,11 @@ function cycle(index: number) {
   // Keep surrounding whitespace exactly as it was
   const m = span.value.match(/^(\s*)([\s\S]*?)(\s*)$/)!;
   const current = m[2];
+  // The backend's alternatives don't include the model's own word; remember it so it can come back
+  const alts = span.alternatives || [];
+  if (!alts.some(a => a.trim().toLowerCase() === current.toLowerCase())) {
+    span.alternatives = [current, ...alts];
+  }
   const pos = opts.findIndex(o => o.toLowerCase() === current.toLowerCase());
   const next = matchCase(opts[(pos + 1) % opts.length], current);
   span.value = `${m[1]}${next}${m[3]}`;

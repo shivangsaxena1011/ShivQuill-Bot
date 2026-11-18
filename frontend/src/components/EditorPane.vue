@@ -118,6 +118,8 @@ function undo() {
 }
 
 function redo() {
+  // Commit pending typing first: new edits after an undo clear the redo stack instead of being overwritten
+  flushTyping();
   const next = future.value.pop();
   if (next === undefined) return;
   past.value.push(props.modelValue);

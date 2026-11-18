@@ -13,7 +13,7 @@ export function toClientError(error: unknown, fallbackMessage: string): { status
     if (error.status === 429) {
       return { status: 429, message: 'The AI provider is busy right now. Please wait a moment and try again.' };
     }
-    return { status: 502, message: 'The AI provider could not complete this request. Please try again.' };
+    return { status: 502, message: error.clientMessage || 'The AI provider could not complete this request. Please try again.' };
   }
   return { status: 500, message: fallbackMessage };
 }

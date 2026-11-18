@@ -10,7 +10,6 @@
       :placeholder="modelValue.length ? '' : placeholder"
       :maxlength="100"
       :aria-label="placeholder"
-      @keydown.enter.prevent="add"
       @keydown="onKey"
       @blur="add"
     />
@@ -46,7 +45,12 @@ function remove(i: number) {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === ',') {
+  // Ignore keys that confirm an IME composition, so a half-typed word isn't added
+  if (e.isComposing || e.keyCode === 229) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    add();
+  } else if (e.key === ',') {
     e.preventDefault();
     add();
   } else if (e.key === 'Backspace' && !draft.value && props.modelValue.length) {

@@ -45,7 +45,16 @@ async function summarizeLarge(
       },
       signal
     );
-    working = partials.map(p => p.trim()).join('\n\n');
+    const next = partials.map(p => p.trim()).join('\n\n');
+    // A pass that doesn't shrink the text (model echoing its input) will never converge
+    const converged = next.length < working.length;
+    working = next;
+    if (!converged) break;
+  }
+  if (working.length > limit) {
+    // Never send the final request over the provider limit; cut at the last whitespace before it
+    const cut = working.lastIndexOf(' ', limit);
+    working = working.slice(0, cut > limit * 0.8 ? cut : limit);
   }
   stream?.send('status', { message: 'Writing summary…' });
   const onToken = stream ? (d: string) => stream.send('delta', { text: d }) : undefined;
@@ -70,7 +79,8 @@ summarizeRouter.post('/', async (req: Request, res: Response) => {
     if (format === 'bullet') {
       keyPoints = summary
         .split('\n')
-        .map(line => line.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim())
+        // Require whitespace after the marker so "**Bold:** text" keeps its markup
+        .map(line => line.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, '').trim())
         .filter(line => line.length > 0);
     }
 

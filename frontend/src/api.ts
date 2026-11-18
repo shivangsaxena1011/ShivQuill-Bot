@@ -109,24 +109,66 @@ export interface TranslateResult {
   targetLang: string;
 }
 
+export type AiLabel = 'ai' | 'ai_refined' | 'human_refined' | 'human';
+
 export interface DetectorResult {
   aiPercentage: number;
   humanPercentage: number;
-  confidence: string;
+  breakdown: { aiGenerated: number; aiRefined: number; humanRefined: number; human: number };
+  confidence: 'High' | 'Moderate' | 'Low';
   overallVerdict: string;
-  sentences: { text: string; aiLikelihood: number; flag: 'human' | 'mixed' | 'ai' }[];
-  metrics: { entropyScore: number; burstinessScore: number; shannonEntropy: number; sentenceLengthCV: number; typeTokenRatio: number };
+  summary: string;
+  sentences: { text: string; start: number; end: number; words: number; aiLikelihood: number; label: AiLabel; flag: 'human' | 'mixed' | 'ai'; reason?: string }[];
+  explanations: { text: string; label: AiLabel; aiLikelihood: number; reason: string }[];
+  signals: string[];
+  metrics: { entropyScore: number; burstinessScore: number; shannonEntropy: number; sentenceLengthCV: number; typeTokenRatio: number; aiPhraseCount: number };
+  method: 'model+statistics' | 'statistics';
+  methodNote: string;
+  analyzedWords: number;
+  totalWords: number;
+  truncated: boolean;
   disclaimer: string;
   falsePositiveRisk: string;
+}
+
+export type MatchType = 'identical' | 'minor' | 'paraphrased';
+export type SourceKind = 'web' | 'wikipedia' | 'academic' | 'local';
+
+export interface PlagiarismSource {
+  id: string;
+  url: string;
+  title: string;
+  authorOrSource: string;
+  kind: SourceKind;
+  matchedPercent: number;
+  matchedWords: number;
+  identicalWords: number;
+  minorChangesWords: number;
+  paraphrasedWords: number;
+  snippetOnly: boolean;
+  matchedText: string;
 }
 
 export interface PlagiarismResult {
   similarityScore: number;
   uniquenessScore: number;
   totalWordsChecked: number;
-  matchedSources: { id: string; url: string; title: string; authorOrSource: string; matchedPercent: number; documentSimilarity?: number; matchedText: string }[];
-  matchedSegments: { text: string; sourceTitle?: string; sourceUrl?: string; start?: number; end?: number }[];
-  corpusStats: { indexedDocuments: number; note: string };
+  matchedWords: number;
+  breakdown: { identical: number; minorChanges: number; paraphrased: number };
+  matchedSources: PlagiarismSource[];
+  matchedSegments: { text: string; start: number; end: number; sourceId: string; sourceTitle: string; sourceUrl: string; matchType: MatchType; sourceExcerpt: string }[];
+  excludedQuotedWords: number;
+  corpusStats: { indexedDocuments: number; note: string; searchedScope: string };
+  coverage: {
+    online: boolean;
+    queries: string[];
+    providers: { id: string; label: string; status: 'ok' | 'no_results' | 'rate_limited' | 'blocked' | 'failed' | 'skipped'; queried: number; results: number; message?: string }[];
+    sourcesFound: number;
+    sourcesCompared: number;
+    complete: boolean;
+    durationMs: number;
+    note: string;
+  };
 }
 
 export interface CitationParams {
@@ -308,8 +350,9 @@ export const api = {
     http.post<{ alternatives: string[] }>('/paraphrase/sentence', body, { signal: o.signal }).then(r => r.data),
   toneAnalyze: (text: string, o: Opts = {}) => http.post<ToneAnalysis>('/tone/analyze', { text }, { signal: o.signal }).then(r => r.data),
   toneRewrite: (text: string, tone: string, h: StreamHandlers = {}) => streamPost<ToneRewriteResult>('/tone/rewrite', { text, tone }, h),
-  detector: (text: string, o: Opts = {}) => http.post<DetectorResult>('/originality/detector', { text }, { signal: o.signal }).then(r => r.data),
-  plagiarism: (text: string, o: Opts = {}) => http.post<PlagiarismResult>('/originality/plagiarism', { text }, { signal: o.signal }).then(r => r.data),
+  detector: (text: string, h: StreamHandlers = {}) => streamPost<DetectorResult>('/originality/detector', { text }, h),
+  plagiarism: (text: string, excludeQuotes: boolean, h: StreamHandlers = {}) =>
+    streamPost<PlagiarismResult>('/originality/plagiarism', { text, excludeQuotes }, h),
   citation: (body: CitationParams, o: Opts = {}) => http.post<CitationResult>('/originality/citation', body, { signal: o.signal }).then(r => r.data),
   chat: (messages: ChatTurn[], documentContext: string | undefined, h: StreamHandlers = {}) =>
     streamPost<{ content: string }>('/chat', { messages, documentContext }, h)

@@ -29,7 +29,7 @@ const issueSchema = z.object({
 });
 
 /** Keeps the usable issues and drops malformed ones instead of failing the whole batch. */
-const issueList = z.array(z.unknown()).transform(items =>
+const issueList = z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.unknown())).transform(items =>
   items.flatMap(item => {
     const r = issueSchema.safeParse(item);
     return r.success && r.data.original ? [r.data] : [];
@@ -37,8 +37,9 @@ const issueList = z.array(z.unknown()).transform(items =>
 );
 
 const parsedGrammarResponseSchema = z.object({
-  correctedText: z.string(),
-  issues: issueList.default([])
+  // Models often omit or null these on clean text ({"issues": []}); treat that as "no changes"
+  correctedText: z.preprocess(v => (typeof v === 'string' ? v : ''), z.string()),
+  issues: issueList
 });
 
 type ParsedGrammarBatch = z.output<typeof parsedGrammarResponseSchema>;

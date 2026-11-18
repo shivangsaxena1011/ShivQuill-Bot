@@ -117,7 +117,8 @@ function tryParse(candidate: string): { ok: true; value: unknown } | { ok: false
  * When `prefer` is 'object' (the default), objects are tried before arrays.
  */
 export function extractJson(raw: string, prefer: 'object' | 'array' = 'object'): unknown {
-  let text = (raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // Drop reasoning blocks, including a trailing <think> that was never closed (cut-off reply)
+  let text = (raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/i, '').trim();
   if (!text) throw new JsonExtractionError(raw, 'Empty model response');
 
   // Prefer the contents of a fenced block when present
@@ -135,6 +136,21 @@ export function extractJson(raw: string, prefer: 'object' | 'array' = 'object'):
       for (const span of balancedSpans(block, open)) {
         const parsed = tryParse(span);
         if (parsed.ok) return parsed.value;
+      }
+    }
+    // A stray, unmatched bracket in prose ("use { braces. {...}") swallows the real value into a
+    // span that never closes; rescan from each later bracket so the real value is still found.
+    for (const open of order) {
+      let from = block.indexOf(open);
+      for (let tries = 0; from !== -1 && tries < 50; tries++) {
+        const next = block.indexOf(open, from + 1);
+        if (next === -1) break;
+        const span = balancedSpans(block.slice(next), open)[0];
+        if (span) {
+          const parsed = tryParse(span);
+          if (parsed.ok) return parsed.value;
+        }
+        from = next;
       }
     }
   }

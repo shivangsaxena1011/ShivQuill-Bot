@@ -48,6 +48,19 @@ function resolveRequestType(): RequestType {
 /** Default Groq model, also used when a configured Groq model returns 404 (e.g. retired). */
 export const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-120b';
 
+/**
+ * Number of reverse-proxy hops to trust for client IPs. Trusting a hop that doesn't exist lets clients
+ * spoof X-Forwarded-For and dodge per-IP rate limits, so only default to 1 on Render (which sets RENDER).
+ */
+function parseTrustProxy(raw: string | undefined): number {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (v === '') return process.env.RENDER ? 1 : 0;
+  if (v === 'true') return 1;
+  if (v === 'false') return 0;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 export const config = {
   env: nodeEnv,
   port: parseInt(process.env.PORT || '5000', 10),
@@ -56,7 +69,7 @@ export const config = {
     .split(',')
     .map(o => o.trim().replace(/\/$/, ''))
     .filter(Boolean),
-  trustProxy: parseInt(process.env.TRUST_PROXY || '1', 10) || 0,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   aiRequestsPerMinute: Math.max(1, parseInt(process.env.AI_REQUESTS_PER_MINUTE || (nodeEnv === 'test' ? '10000' : '30'), 10) || 30),
   corpusAdminApiKey: process.env.CORPUS_ADMIN_KEY || '',
   requestType: resolveRequestType(),

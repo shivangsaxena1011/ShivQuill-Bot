@@ -34,7 +34,7 @@
           v-model="draft"
           placeholder="Ask anything about your writing…"
           maxlength="20000"
-          @keydown.enter.exact.prevent="send()"
+          @keydown.enter.exact="onEnter"
         ></textarea>
         <button v-if="req.loading.value" class="btn btn-danger btn-icon" type="button" aria-label="Stop" @click="req.cancel()"><Square /></button>
         <button v-else class="btn btn-primary btn-icon" type="submit" :disabled="!draft.trim()" aria-label="Send"><Send /></button>
@@ -88,6 +88,13 @@ watch(() => workspace.chatOpen, open => {
 function reset() {
   req.cancel();
   messages.value = [greeting];
+}
+
+// Enter that confirms an IME composition (Chinese, Japanese, Hindi…) must not send the message
+function onEnter(e: KeyboardEvent) {
+  if (e.isComposing || e.keyCode === 229) return;
+  e.preventDefault();
+  send();
 }
 
 async function send(text?: string) {

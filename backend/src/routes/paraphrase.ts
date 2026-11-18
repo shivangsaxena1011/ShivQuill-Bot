@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { DocumentProcessingJob, documentJobRegistry, JobCancelledError } from '../chunkOrchestrator.js';
+import { DocumentProcessingJob, documentJobRegistry, JobCancelledError, findMissingFrozenTerms } from '../chunkOrchestrator.js';
 import { generateDiffSpansForPairs } from '../diff.js';
 import { config } from '../config.js';
 import { completeStructured, MalformedModelResponseError } from '../structuredCompletion.js';
@@ -124,10 +124,7 @@ export function buildParaphraseResponse(job: DocumentProcessingJob): FullParaphr
     semanticConsistency: evaluateSemanticConsistency(job.originalText, paraphrasedText),
     partialRecovery: job.partialRecovery,
     // Frozen terms that were in the input but did not survive the rewrite (so the UI can warn)
-    frozenWordsMissing: job.frozenWords.filter(w => {
-      const lower = w.toLowerCase();
-      return job.originalText.toLowerCase().includes(lower) && !paraphrasedText.toLowerCase().includes(lower);
-    })
+    frozenWordsMissing: findMissingFrozenTerms(job.frozenWords, job.originalText, paraphrasedText)
   };
   responseCache.set(job, response);
   return response;

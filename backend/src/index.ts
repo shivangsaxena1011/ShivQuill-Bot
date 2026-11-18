@@ -106,7 +106,11 @@ const aiLimiter = rateLimit({
 });
 // Applies to every POST under these prefixes (e.g. /api/paraphrase/sentence, /api/tone/rewrite),
 // except job cancellation, which must always be allowed.
-const AI_PREFIXES = ['/api/paraphrase', '/api/grammar', '/api/humanize', '/api/summarize', '/api/translate', '/api/chat', '/api/suggestions', '/api/tone'];
+const AI_PREFIXES = [
+  '/api/paraphrase', '/api/grammar', '/api/humanize', '/api/summarize', '/api/translate', '/api/chat', '/api/suggestions', '/api/tone',
+  // The AI detector spends model tokens; the plagiarism scan makes many outbound search requests
+  '/api/originality/detector', '/api/originality/plagiarism'
+];
 app.use((req: Request, res: Response, next: NextFunction) => {
   // Express routing is case-insensitive, so the match must be too (/API/Paraphrase reaches the same router)
   const reqPath = req.path.toLowerCase();
@@ -187,6 +191,11 @@ app.use('/api', (req: Request, res: Response) => {
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
   if (req.path.startsWith('/api')) {
     return next();
+  }
+  // A missing build file (e.g. an old release's chunk) must 404, not return index.html with 200:
+  // the HTML would be cached and executed as that JS/CSS file by the browser and service worker
+  if (req.path.startsWith('/assets/') || /\.(?:js|mjs|css|map|json|png|jpe?g|svg|ico|webp|woff2?|ttf|webmanifest)$/i.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
   }
   res.sendFile(path.join(frontendDistPath, 'index.html'), err => {
     if (err) {
