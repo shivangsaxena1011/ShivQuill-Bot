@@ -150,3 +150,18 @@ describe('audit round 3 fixes', () => {
     expect(parts.map(p => p.text).join('')).toBe(text);
   });
 });
+
+describe('analysisWordCount (matches the server tokenizer)', () => {
+  it('counts letter/digit runs, not whitespace chunks', async () => {
+    const { analysisWordCount } = await import('./text');
+    expect(analysisWordCount('- • & 🎉 hello, world 2024')).toBe(3);
+    expect(analysisWordCount("it's fine")).toBe(2);
+  });
+
+  it('splits Chinese text into words instead of one giant chunk', async () => {
+    const { analysisWordCount, wordCount } = await import('./text');
+    const zh = '长城是中国古代的军事防御工程，是一道高大、坚固而且连绵不断的长垣。';
+    expect(wordCount(zh)).toBe(1);
+    expect(analysisWordCount(zh)).toBeGreaterThan(10);
+  });
+});

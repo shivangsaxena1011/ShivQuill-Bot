@@ -14,7 +14,9 @@
     "start": "node backend/dist/index.js",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
-    "render-build": "npm run install:all && npm run build"
+    "render-build": "npm run install:all && npm run build",
+    "setup:keys": "node scripts/setup-keys.mjs",
+    "check:keys": "node scripts/setup-keys.mjs --check"
   },
   "keywords": [
     "ai-writing",

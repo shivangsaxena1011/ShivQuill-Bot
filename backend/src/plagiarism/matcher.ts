@@ -139,10 +139,17 @@ export function compareWithSource(input: PreparedInput, sourceText: string, excl
       const type: MatchType = gaps === 0 ? 'identical' : 'minor';
       // Word-level: exactly matched words are identical, the changed words in between are minor changes
       for (let t = start; t < end; t++) mask[t] = Math.max(mask[t], covered[t] ? 3 : 2);
+      // Excerpt from the passage's dominant alignment (source pos − input pos), so a stray seed on a
+      // common phrase elsewhere in the source ("one of the most") can't stretch it over unrelated text
+      const diagCount = new Map<number, number>();
+      for (let t = start; t < end; t++) if (srcPos[t] >= 0) diagCount.set(srcPos[t] - t, (diagCount.get(srcPos[t] - t) || 0) + 1);
+      let mainDiag = 0;
+      let best = -1;
+      for (const [d, c] of diagCount) if (c > best) [mainDiag, best] = [d, c];
       let c0 = Infinity;
       let c1 = -1;
       for (let t = start; t < end; t++) {
-        if (srcPos[t] >= 0) {
+        if (srcPos[t] >= 0 && Math.abs(srcPos[t] - t - mainDiag) <= MAX_GAP + 1) {
           c0 = Math.min(c0, srcPos[t]);
           c1 = Math.max(c1, srcPos[t] + 1);
         }

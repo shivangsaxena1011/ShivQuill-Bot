@@ -1,3 +1,37 @@
+const ANALYSIS_WORD_RE = /[\p{L}\p{M}\p{N}]+(?:['’][\p{L}]+)?/gu;
+const SPACELESS_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+let segmenter: Intl.Segmenter | null | undefined;
+
+/**
+ * Word count exactly like the server's analysis tokenizer (letters/digits runs; Chinese, Japanese,
+ * Thai… split into dictionary words), so "minimum words" gates agree with the backend.
+ */
+export function analysisWordCount(text: string): number {
+  if (!text) return 0;
+  let count = 0;
+  ANALYSIS_WORD_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = ANALYSIS_WORD_RE.exec(text)) !== null) {
+    if (!SPACELESS_RE.test(m[0])) {
+      count++;
+      continue;
+    }
+    if (segmenter === undefined) {
+      try {
+        segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+      } catch {
+        segmenter = null;
+      }
+    }
+    if (!segmenter) {
+      count += m[0].length; // rough fallback: one word per character
+      continue;
+    }
+    for (const part of segmenter.segment(m[0])) if (part.isWordLike) count++;
+  }
+  return count;
+}
+
 /** Fast word count without allocating a big array (matters for 1M-char documents). */
 export function wordCount(text: string): number {
   if (!text) return 0;

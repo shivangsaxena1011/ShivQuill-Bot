@@ -11,6 +11,7 @@ import https from 'https';
 import dns from 'dns';
 import net from 'net';
 import zlib from 'zlib';
+import { pipeline } from 'stream';
 
 export interface SafeFetchOptions {
   method?: 'GET' | 'POST';
@@ -20,6 +21,11 @@ export interface SafeFetchOptions {
   maxBytes?: number;
   signal?: AbortSignal;
   maxRedirects?: number;
+  /**
+   * Only for admin-configured endpoints (e.g. a self-hosted SearXNG on localhost:8080): skip the
+   * public-address and port checks for that endpoint's own origin. Redirects elsewhere are still checked.
+   */
+  allowPrivateNetwork?: boolean;
 }
 
 export interface SafeFetchResult {
@@ -104,7 +110,7 @@ function safeLookup(hostname: string, options: any, callback: any) {
   });
 }
 
-export function assertFetchableUrl(raw: string): URL {
+export function assertFetchableUrl(raw: string, trusted = false): URL {
   let u: URL;
   try {
     u = new URL(raw);
@@ -113,6 +119,7 @@ export function assertFetchableUrl(raw: string): URL {
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new BlockedUrlError('Only http(s) URLs can be fetched');
   if (u.username || u.password) throw new BlockedUrlError('URLs with credentials are not fetched');
+  if (trusted) return u;
   const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80;
   if (port !== 80 && port !== 443) throw new BlockedUrlError('Only ports 80 and 443 are allowed');
   const host = u.hostname.replace(/^\[|\]$/g, '');
@@ -127,7 +134,26 @@ function requestOnce(u: URL, opts: SafeFetchOptions, deadline: number): Promise<
   return new Promise((resolve, reject) => {
     const lib = u.protocol === 'https:' ? https : http;
     const maxBytes = opts.maxBytes ?? 2_000_000;
-    const req = lib.request(
+    let settled = false;
+    let req: http.ClientRequest;
+    // Every exit (success, error, abort, timeout) goes through here exactly once
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimer);
+      opts.signal?.removeEventListener('abort', onAbort);
+      fn();
+    };
+    const fail = (e: Error) =>
+      settle(() => {
+        req?.destroy();
+        reject(e);
+      });
+    const onAbort = () => fail(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
+    // Hard deadline: the socket `timeout` option only catches idle sockets, not slow-drip servers
+    const hardTimer = setTimeout(() => fail(new Error('Request timed out')), Math.max(1, deadline - Date.now()));
+
+    req = lib.request(
       u,
       {
         method: opts.method || 'GET',
@@ -136,69 +162,87 @@ function requestOnce(u: URL, opts: SafeFetchOptions, deadline: number): Promise<
           ...(opts.body ? { 'Content-Length': Buffer.byteLength(opts.body).toString() } : {}),
           ...opts.headers
         },
-        lookup: safeLookup as any,
+        lookup: opts.allowPrivateNetwork ? undefined : (safeLookup as any),
         timeout: Math.max(1, deadline - Date.now())
       },
       res => {
+        res.on('error', fail);
+        const status = res.statusCode || 0;
+        // Redirects: no body needed. Handled before any decompression so a bogus body can't throw.
+        if (status >= 300 && status < 400) {
+          settle(() => resolve({ res, body: Buffer.alloc(0) }));
+          req.destroy();
+          return;
+        }
+
+        const enc = String(res.headers['content-encoding'] || '').toLowerCase();
+        const decoder =
+          enc === 'gzip' || enc === 'x-gzip' ? zlib.createGunzip() : enc === 'deflate' ? zlib.createInflate() : enc === 'br' ? zlib.createBrotliDecompress() : null;
+        // pipeline forwards errors from either side (corrupt or truncated compressed bodies)
+        const stream: NodeJS.ReadableStream = decoder ? decoder : res;
+        if (decoder) pipeline(res, decoder, err => (err ? fail(err) : undefined));
+        else res.on('close', () => (!res.complete ? fail(new Error('Connection closed before the response finished')) : undefined));
+
         const chunks: Buffer[] = [];
         let size = 0;
-        let stream: NodeJS.ReadableStream = res;
-        const enc = String(res.headers['content-encoding'] || '').toLowerCase();
-        if (enc === 'gzip' || enc === 'x-gzip') stream = res.pipe(zlib.createGunzip());
-        else if (enc === 'deflate') stream = res.pipe(zlib.createInflate());
-        else if (enc === 'br') stream = res.pipe(zlib.createBrotliDecompress());
-        // Redirect / error responses don't need a body
-        if ((res.statusCode || 0) >= 300 && (res.statusCode || 0) < 400) {
-          res.resume();
-          return resolve({ res, body: Buffer.alloc(0) });
-        }
-        let done = false;
-        const finishWith = () => {
-          if (done) return;
-          done = true;
-          resolve({ res, body: Buffer.concat(chunks) });
-        };
         stream.on('data', (c: Buffer) => {
-          if (done) return;
+          if (settled) return;
           const room = maxBytes - size;
           size += c.length;
           if (size >= maxBytes) {
             // Huge page: keep the first maxBytes (enough to compare) and stop downloading
             if (room > 0) chunks.push(c.subarray(0, room));
-            finishWith();
+            settle(() => resolve({ res, body: Buffer.concat(chunks) }));
             req.destroy();
             return;
           }
           chunks.push(c);
         });
-        stream.on('end', finishWith);
-        stream.on('error', (e: Error) => (done ? undefined : reject(e)));
+        stream.on('end', () => {
+          // The decoder can finish before the HTTP body did (truncated/lying Content-Length): not a success
+          if (!res.complete) return fail(new Error('Connection closed before the response finished'));
+          settle(() => resolve({ res, body: Buffer.concat(chunks) }));
+        });
+        stream.on('error', fail);
       }
     );
-    const onAbort = () => req.destroy(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
     if (opts.signal) {
       if (opts.signal.aborted) return onAbort();
       opts.signal.addEventListener('abort', onAbort, { once: true });
-      req.on('close', () => opts.signal!.removeEventListener('abort', onAbort));
     }
-    req.on('timeout', () => req.destroy(new Error('Request timed out')));
-    req.on('error', reject);
+    req.on('timeout', () => fail(new Error('Request timed out')));
+    req.on('error', fail);
     if (opts.body) req.write(opts.body);
     req.end();
   });
 }
 
+/** Charset from the Content-Type header, else from a <meta> tag in the first bytes of an HTML body. */
+function detectCharset(contentType: string, buf: Buffer): string {
+  const fromHeader = contentType.match(/charset=["']?([\w.:-]+)/i)?.[1];
+  if (fromHeader) return fromHeader.toLowerCase();
+  if (/html|xml/.test(contentType) || !contentType) {
+    const head = buf.subarray(0, 4096).toString('latin1');
+    const meta = head.match(/<meta[^>]+charset=["']?\s*([\w.:-]+)/i)?.[1];
+    if (meta) return meta.toLowerCase();
+  }
+  return 'utf-8';
+}
+
 export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Promise<SafeFetchResult> {
   const deadline = Date.now() + (opts.timeoutMs ?? 8000);
-  let u = assertFetchableUrl(rawUrl);
+  let u = assertFetchableUrl(rawUrl, opts.allowPrivateNetwork);
+  const trustedOrigin = opts.allowPrivateNetwork ? u.origin : null;
   let method = opts.method || 'GET';
   let body = opts.body;
   for (let hop = 0; hop <= (opts.maxRedirects ?? 4); hop++) {
     if (Date.now() >= deadline) throw new Error('Request timed out');
-    const { res, body: buf } = await requestOnce(u, { ...opts, method, body }, deadline);
+    const trusted = trustedOrigin !== null && u.origin === trustedOrigin;
+    const { res, body: buf } = await requestOnce(u, { ...opts, method, body, allowPrivateNetwork: trusted }, deadline);
     const status = res.statusCode || 0;
     if (status >= 300 && status < 400 && res.headers.location) {
-      u = assertFetchableUrl(new URL(res.headers.location, u).toString());
+      const next = new URL(res.headers.location, u);
+      u = assertFetchableUrl(next.toString(), trustedOrigin !== null && next.origin === trustedOrigin);
       // 303 (and legacy 301/302 for POST) continue as GET
       if (status === 303 || ((status === 301 || status === 302) && method === 'POST')) {
         method = 'GET';
@@ -207,10 +251,10 @@ export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Pr
       continue;
     }
     const contentType = String(res.headers['content-type'] || '').toLowerCase();
-    const charset = contentType.match(/charset=([\w-]+)/)?.[1]?.toLowerCase();
+    const charset = detectCharset(contentType, buf);
     let text: string;
     try {
-      text = new TextDecoder(charset && charset !== 'utf8' ? charset : 'utf-8').decode(buf);
+      text = new TextDecoder(charset === 'utf8' ? 'utf-8' : charset).decode(buf);
     } catch {
       text = buf.toString('utf8');
     }

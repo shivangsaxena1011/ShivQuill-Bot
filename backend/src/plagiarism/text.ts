@@ -20,15 +20,45 @@ export interface SentenceSpan {
 }
 
 const WORD_RE = /[\p{L}\p{M}\p{N}]+(?:['’][\p{L}]+)?/gu;
+/** Scripts written without spaces between words: a regex "word" there is a whole clause */
+const SPACELESS_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+let segmenter: Intl.Segmenter | null | undefined;
+function wordSegmenter(): Intl.Segmenter | null {
+  if (segmenter === undefined) {
+    try {
+      segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+    } catch {
+      segmenter = null;
+    }
+  }
+  return segmenter;
+}
 
 export function tokenize(text: string): Token[] {
   const out: Token[] = [];
   WORD_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = WORD_RE.exec(text)) !== null) {
-    out.push({ w: m[0].toLowerCase().replace(/’/g, "'"), start: m.index, end: m.index + m[0].length });
+    const run = m[0];
+    const seg = SPACELESS_RE.test(run) ? wordSegmenter() : null;
+    if (seg) {
+      // Split Chinese/Japanese/Thai… runs into dictionary words (single characters as a fallback)
+      for (const part of seg.segment(run)) {
+        if (!part.isWordLike) continue;
+        const start = m.index + part.index;
+        out.push({ w: part.segment.toLowerCase(), start, end: start + part.segment.length });
+      }
+      continue;
+    }
+    out.push({ w: run.toLowerCase().replace(/’/g, "'"), start: m.index, end: m.index + run.length });
   }
   return out;
+}
+
+/** Word count consistent with the tokenizer (used for minimums and percentages). */
+export function countWords(text: string): number {
+  return tokenize(text).length;
 }
 
 /** Sentence spans aligned to token indices (ends at . ! ? 。！？ or a line break). */
@@ -65,7 +95,8 @@ export const STOPWORDS = new Set(
 );
 
 export function isStop(w: string): boolean {
-  return STOPWORDS.has(w) || w.length < 2;
+  // Single Latin letters/digits are noise; a single Han/kana character is often a full word
+  return STOPWORDS.has(w) || (w.length < 2 && !SPACELESS_RE.test(w));
 }
 
 /** Very light suffix stripping so "trained"/"training"/"trains" compare equal for paraphrase checks. */
