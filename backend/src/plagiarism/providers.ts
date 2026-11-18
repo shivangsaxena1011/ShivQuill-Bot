@@ -113,7 +113,7 @@ export const duckDuckGoProvider: SearchProvider = {
       body: new URLSearchParams({ q: query, kl: 'wt-wt' }).toString(),
       headers: { 'User-Agent': BROWSER_UA, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'text/html' },
       signal,
-      timeoutMs: 9000
+      timeoutMs: 7000 // an unreachable engine costs at most one timeout per pause window (see engine.ts)
     });
     if (r.status === 429) throw new ProviderBlockedError('rate_limited', 'Rate limited');
     // DuckDuckGo answers suspected automation with a challenge page; respect it instead of retrying around it

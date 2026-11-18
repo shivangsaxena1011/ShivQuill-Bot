@@ -105,7 +105,16 @@ const MAX_SEGMENTS = 600;
 
 const searchCache = new TtlCache<Candidate[]>(2000, 6 * 3600_000);
 /** Providers that throttled/challenged us are rested (across scans) instead of being retried */
-const cooldownUntil = new Map<string, number>();
+const cooldowns = new Map<string, { until: number; status: ProviderStatus; reason: string }>();
+const UNREACHABLE_PAUSE_SEC = intEnv('PLAGIARISM_UNREACHABLE_PAUSE_SEC', 300, 10, 3600);
+
+/** Timeouts and connection failures: the provider isn't answering this server (e.g. blocked from a cloud IP). */
+function isUnreachable(err: any): boolean {
+  const code = String(err?.code || err?.cause?.code || '');
+  // Dropped connections (ECONNRESET / "socket hang up") are usually transient, so they don't count
+  if (['ETIMEDOUT', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) return true;
+  return /timed out/i.test(String(err?.message || ''));
+}
 const pageCache = new TtlCache<string>(400, 3600_000, 60_000_000, s => s.length);
 
 function linkedSignal(parent: AbortSignal | undefined, ms: number): { signal: AbortSignal; dispose: () => void } {
@@ -216,10 +225,12 @@ async function runProvider(
   let stop = false;
   let answered = 0; // successful (or cached) answers, with or without results
   let errors = 0;
-  const resting = (cooldownUntil.get(p.id) || 0) - Date.now();
-  if (resting > 0) {
-    cov.status = 'rate_limited';
-    cov.message = `Paused for ${Math.ceil(resting / 1000)}s after the provider asked us to slow down`;
+  const cd = cooldowns.get(p.id);
+  const resting = (cd?.until || 0) - Date.now();
+  if (cd && resting > 0) {
+    // Skip instantly instead of waiting on a provider that throttled us or isn't answering
+    cov.status = cd.status;
+    cov.message = `${cd.reason}; skipped for another ${Math.ceil(resting / 1000)}s`;
     return;
   }
   if (p.maxQueries) queries = queries.slice(0, p.maxQueries);
@@ -233,7 +244,7 @@ async function runProvider(
         const release = await acquire(p, signal);
         if (!release) return;
         try {
-          if (signal.aborted || stop || (cooldownUntil.get(p.id) || 0) > Date.now()) return;
+          if (signal.aborted || stop || (cooldowns.get(p.id)?.until || 0) > Date.now()) return;
           cov.queried++;
           results = await p.search(q, { lang, signal });
           searchCache.set(cacheKey, results, results.length ? 6 * 3600_000 : 1800_000);
@@ -242,11 +253,26 @@ async function runProvider(
             cov.status = err.status;
             cov.message = err.message;
             const restSec = Math.min(900, err.retryAfterSec ?? (err.status === 'blocked' ? 600 : 120));
-            cooldownUntil.set(p.id, Date.now() + restSec * 1000);
+            cooldowns.set(p.id, {
+              until: Date.now() + restSec * 1000,
+              status: err.status,
+              reason: err.status === 'blocked' ? 'Asked for a human check' : 'Asked us to slow down'
+            });
             stop = true; // never hammer a provider that throttled or challenged us
             return;
           }
           if (signal.aborted) return;
+          // Only when it hasn't answered at all in this scan: a provider that just worked had a hiccup
+          if (isUnreachable(err) && answered === 0) {
+            // One timeout is enough: waiting ~7s per query on a provider that can't be reached from this
+            // server made every scan ~20s slower. Pause it for all scans for a few minutes.
+            cov.status = 'failed';
+            cov.message = `Not responding (${String(err?.message || 'timeout').slice(0, 60)}); paused for ${UNREACHABLE_PAUSE_SEC}s`;
+            cooldowns.set(p.id, { until: Date.now() + UNREACHABLE_PAUSE_SEC * 1000, status: 'failed', reason: 'Not responding from this server' });
+            errors++;
+            stop = true;
+            return;
+          }
           errors++;
           cov.message = String(err?.message || err).slice(0, 160);
           continue;
