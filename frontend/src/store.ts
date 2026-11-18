@@ -96,16 +96,27 @@ export function persisted(key: string, initial: string): Ref<string> {
   } catch { /* storage unavailable */ }
   const r = ref(start);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  watch(r, v => {
+  const save = () => {
+    timer = undefined;
+    try {
+      // Don't store huge documents; they'd slow every page load
+      if (r.value.length <= 200_000) localStorage.setItem(`sq:${key}`, r.value);
+      else localStorage.removeItem(`sq:${key}`);
+    } catch { /* quota or private mode */ }
+  };
+  watch(r, () => {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      try {
-        // Don't store huge documents; they'd slow every page load
-        if (v.length <= 200_000) localStorage.setItem(`sq:${key}`, v);
-        else localStorage.removeItem(`sq:${key}`);
-      } catch { /* quota or private mode */ }
-    }, 600);
+    timer = setTimeout(save, 600);
   });
+  // Write a pending debounced save when the page is closed or reloaded, so the last keystrokes survive
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        save();
+      }
+    });
+  }
   return r;
 }
 

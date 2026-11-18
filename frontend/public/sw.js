@@ -4,7 +4,7 @@
  * - Pages use network-first, falling back to the cached copy when offline.
  * - API calls (/api/*) are never cached.
  */
-const CACHE = 'shivquill-v2';
+const CACHE = 'shivquill-v3';
 const ASSET_CACHE = 'shivquill-assets-v1';
 const MAX_ASSETS = 80; // roughly two releases' worth of chunks
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png', '/logo.jpg'];
@@ -38,13 +38,21 @@ self.addEventListener('fetch', event => {
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
       caches.match(req).then(hit => hit || fetch(req).then(res => {
-        if (res.ok) {
+        // Never cache an HTML fallback page under a script/style URL
+        const type = res.headers.get('content-type') || '';
+        if (res.ok && !type.includes('text/html')) {
           const copy = res.clone();
           caches.open(ASSET_CACHE).then(cache => cache.put(req, copy)).then(pruneAssets).catch(() => undefined);
         }
         return res;
       }))
     );
+    return;
+  }
+
+  // Precached shell files (logo, icons, manifest): cache-first so they also work offline
+  if (req.mode !== 'navigate' && SHELL.includes(url.pathname) && url.pathname !== '/') {
+    event.respondWith(caches.match(url.pathname).then(hit => hit || fetch(req)));
     return;
   }
 

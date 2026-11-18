@@ -207,7 +207,7 @@ export class DocumentProcessingJob {
             this.synonymStrength,
             this.rollingContext,
             // Only send frozen terms that actually occur in this chunk (keeps prompts short)
-            this.frozenWords.filter(w => chunk.originalText.toLowerCase().includes(w.toLowerCase()))
+            this.frozenWords.filter(w => w && frozenTermRegex(w, 'iu').test(chunk.originalText))
           );
 
           let userPrompt = chunk.originalText;
@@ -242,8 +242,7 @@ export class DocumentProcessingJob {
           if (
             this.isCancelled() ||
             err.name === 'AbortError' ||
-            err.name === 'JobCancelledError' ||
-            err.message?.includes('aborted')
+            err.name === 'JobCancelledError'
           ) {
             this.status = 'cancelled';
             chunk.status = 'failed';
@@ -357,6 +356,25 @@ interface JobEntry {
 /**
  * In-memory manager for active document processing jobs with TTL cleanup and capacity bounds
  */
+/** Whole-term regex: "AI" must not match inside "said"/"maintain". */
+export function frozenTermRegex(term: string, flags = 'u'): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, flags);
+}
+
+/**
+ * Frozen terms that occur in `original` (whole-term, any case) but whose exact spelling there
+ * no longer appears in `rewritten` (e.g. dropped, or "Apple" lowercased to "apple").
+ */
+export function findMissingFrozenTerms(terms: string[], original: string, rewritten: string): string[] {
+  return terms.filter(term => {
+    if (!term) return false;
+    const forms = new Set(original.match(frozenTermRegex(term, 'giu')) || []);
+    if (forms.size === 0) return false;
+    return [...forms].some(form => !frozenTermRegex(form).test(rewritten));
+  });
+}
+
 function isTerminalStatus(status: string): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
@@ -377,17 +395,33 @@ export class DocumentJobRegistry {
       this.prune();
     }
 
-    // Auto-cleanup after TTL
+    const registeredAt = Date.now();
+    this.jobs.set(job.id, {
+      job,
+      registeredAt,
+      timer: this.scheduleExpiry(job, registeredAt)
+    });
+  }
+
+  /**
+   * Auto-cleanup after TTL. A job that is still running is kept (its client is still polling) and
+   * re-checked after another TTL; once it finishes, the client gets a full TTL to fetch the result.
+   * A job that somehow runs past MAX_RUNTIME_TTLS windows is cancelled so it can't burn provider calls forever.
+   */
+  private scheduleExpiry(job: DocumentProcessingJob, registeredAt: number): ReturnType<typeof setTimeout> {
+    const MAX_RUNTIME_TTLS = 4;
     const timer = setTimeout(() => {
+      const entry = this.jobs.get(job.id);
+      if (!entry || entry.job !== job) return;
+      if (!isTerminalStatus(job.status) && Date.now() - registeredAt < this.ttlMs * MAX_RUNTIME_TTLS) {
+        entry.timer = this.scheduleExpiry(job, registeredAt);
+        return;
+      }
+      if (!isTerminalStatus(job.status)) job.cancel();
       this.delete(job.id);
     }, this.ttlMs);
     timer.unref?.();
-
-    this.jobs.set(job.id, {
-      job,
-      registeredAt: Date.now(),
-      timer
-    });
+    return timer;
   }
 
   public get(id: string): DocumentProcessingJob | undefined {
@@ -405,7 +439,8 @@ export class DocumentJobRegistry {
   /** True when every slot is held by a job that is still running. */
   public isFull(): boolean {
     if (this.jobs.size < this.maxActiveJobs) return false;
-    this.prune();
+    // Only reclaim finished jobs here — never evict a job that another user is still running
+    this.pruneFinished();
     return this.jobs.size >= this.maxActiveJobs;
   }
 
@@ -417,19 +452,21 @@ export class DocumentJobRegistry {
     }
   }
 
-  public prune(): void {
-    const now = Date.now();
+  /** Removes completed, failed and cancelled jobs. Running jobs are left untouched. */
+  private pruneFinished(): void {
     for (const [id, entry] of this.jobs.entries()) {
-      const isTerminal = isTerminalStatus(entry.job.status);
-      const isExpired = now - entry.registeredAt > this.ttlMs;
-      if (isTerminal || isExpired) {
+      if (isTerminalStatus(entry.job.status)) {
         clearTimeout(entry.timer);
         this.jobs.delete(id);
       }
     }
+  }
 
-    // If still at or above capacity, drop the oldest entry (cancelling it so it doesn't keep
-    // consuming provider calls while no longer trackable)
+  public prune(): void {
+    this.pruneFinished();
+
+    // Last resort for callers that register without checking isFull(): drop the oldest entry
+    // (cancelling it so it doesn't keep consuming provider calls while no longer trackable)
     if (this.jobs.size >= this.maxActiveJobs) {
       const oldestId = Array.from(this.jobs.keys())[0];
       if (oldestId) {

@@ -264,14 +264,17 @@ async function runJob(m: ParaphraseMode, signal: AbortSignal, onProgress?: (p: J
 
 async function runSingle() {
   progress.value = null;
-  const final = await req.run(signal => runJob(mode.value, signal, p => (progress.value = p)));
+  // Capture what was submitted: the user may edit the text or switch mode while a long job runs
+  const runMode = mode.value;
+  const runInput = input.value;
+  const final = await req.run(signal => runJob(runMode, signal, p => (progress.value = p)));
   if (final) {
     result.value = final;
     output.value = final.paraphrasedText;
     swapped.value = '';
     spans.value = final.diffSpans;
     view.value = 'changes';
-    addHistory({ tool: 'paraphrase', label: `Paraphrase · ${modeLabel(mode.value)}`, input: input.value, output: final.paraphrasedText });
+    addHistory({ tool: 'paraphrase', label: `Paraphrase · ${modeLabel(runMode)}`, input: final.originalText || runInput, output: final.paraphrasedText });
   }
 }
 

@@ -83,23 +83,43 @@ function isPassive(sentence: string): boolean {
   return false;
 }
 
-/** Splits text into sentences with their start offsets. */
+const ABBREVIATIONS = new Set([
+  'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'st', 'vs', 'etc', 'e.g', 'i.e', 'al', 'fig', 'figs',
+  'no', 'inc', 'ltd', 'co', 'corp', 'approx', 'dept', 'est', 'vol', 'eq', 'cf', 'ca', 'jan', 'feb',
+  'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'
+]);
+
+/**
+ * Splits text into sentences with their start offsets. A period only ends a sentence when it is
+ * followed by whitespace (so "3.5%" stays whole), is not an abbreviation or initial ("Dr.", "e.g.",
+ * "U.S.", "J. Smith"), and the next word doesn't start in lowercase.
+ */
 export function splitSentences(text: string): SentenceInfo[] {
   const result: SentenceInfo[] = [];
-  const re = /[^.!?\n]+(?:[.!?]+["')\]]*|\n|$)/g;
+  const push = (from: number, to: number) => {
+    const raw = text.slice(from, to);
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const words = (trimmed.match(/[\p{L}\p{N}'’-]+/gu) || []).length;
+    if (words === 0) return;
+    result.push({ text: trimmed, start: from + raw.indexOf(trimmed), words, passive: isPassive(trimmed) });
+  };
+
+  const re = /[.!?]+["')\]’”]*(?=\s|$)|\n/g;
+  let start = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    if (m[0].length === 0) {
-      re.lastIndex++;
-      continue;
+    const end = m.index + m[0].length;
+    if (m[0] !== '\n' && /^\.["')\]’”]*$/.test(m[0])) {
+      const before = (text.slice(Math.max(start, m.index - 16), m.index).match(/[\p{L}.]+$/u)?.[0] || '').toLowerCase();
+      const next = text.slice(end).match(/^\s*(\S)/u)?.[1] || '';
+      const isAbbreviation = ABBREVIATIONS.has(before) || /^\p{L}(?:\.\p{L})*$/u.test(before);
+      if (isAbbreviation || /\p{Ll}/u.test(next)) continue;
     }
-    const raw = m[0];
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-    const words = (trimmed.match(/[\p{L}\p{N}'’-]+/gu) || []).length;
-    if (words === 0) continue;
-    result.push({ text: trimmed, start: m.index + raw.indexOf(trimmed), words, passive: isPassive(trimmed) });
+    push(start, end);
+    start = end;
   }
+  push(start, text.length);
   return result;
 }
 

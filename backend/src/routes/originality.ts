@@ -2,14 +2,13 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { config } from '../config.js';
-import {
-  AiDetectionResponse,
-  AiDetectionSentence,
-  PlagiarismCheckResponse,
-  CitationResponse
-} from '../types.js';
+import { CitationResponse } from '../types.js';
 import { defaultCorpusManager } from '../corpus.js';
 import { formatCitation, parseAuthorName, CitationSource, CitationAuthor } from '../citation.js';
+import { scanForPlagiarism } from '../plagiarism/engine.js';
+import { detectAiText, MIN_WORDS } from '../aiDetector.js';
+import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
+import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
 
 export const originalityRouter = Router();
 
@@ -46,135 +45,67 @@ function verifyCorpusAdminAuth(req: Request, res: Response, next: NextFunction) 
 }
 
 // ----------------------------------------------------
-// 1. AI Detector Endpoint (Experimental Statistical Linguistic Analyzer)
+// 1. AI Detector Endpoint (language-model judgement + writing statistics)
 // ----------------------------------------------------
 const aiDetectorSchema = z.object({
-  text: z.string().min(30, 'Input must be at least 30 characters for statistical evaluation').max(1000000)
+  text: z
+    .string()
+    .max(200000, 'Text exceeds the 200,000 character limit per scan')
+    .refine(t => (t.match(/[\p{L}\p{M}\p{N}]+/gu) || []).length >= MIN_WORDS, `Add at least ${MIN_WORDS} words so the detector has enough text to analyze`),
+  model: z.string().optional()
 });
 
-originalityRouter.post('/detector', (req: Request, res: Response) => {
+originalityRouter.post('/detector', async (req: Request, res: Response) => {
+  const signal = abortOnClientDisconnect(res);
+  let stream: SseChannel | null = null;
   try {
-    const { text } = aiDetectorSchema.parse(req.body);
-
-    const sentences = text.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 0);
-    const words = text.toLowerCase().match(/\b[a-z]{2,}\b/g) || [];
-    const totalWords = words.length || 1;
-
-    // 1. Calculate genuine Shannon Entropy (lexical information density)
-    const freqMap = new Map<string, number>();
-    for (const w of words) {
-      freqMap.set(w, (freqMap.get(w) || 0) + 1);
-    }
-    let entropy = 0;
-    for (const count of freqMap.values()) {
-      const p = count / totalWords;
-      entropy -= p * Math.log2(p);
-    }
-
-    // 2. Calculate Burstiness: Coefficient of Variation (CV) of sentence lengths
-    const sentenceLengths = sentences.map(s => s.trim().split(/\s+/).filter(Boolean).length);
-    const meanLength = sentenceLengths.reduce((a, b) => a + b, 0) / (sentenceLengths.length || 1);
-    const variance = sentenceLengths.reduce((a, b) => a + Math.pow(b - meanLength, 2), 0) / (sentenceLengths.length || 1);
-    const stdDev = Math.sqrt(variance);
-    const cv = meanLength > 0 ? stdDev / meanLength : 0; // CV > 0.4 typically reflects varied human cadence
-
-    // 3. Type-Token Ratio (TTR)
-    const ttr = parseFloat((freqMap.size / totalWords).toFixed(3));
-
-    // Transparent sentence-level statistical regularity analysis
-    const sentenceScores: AiDetectionSentence[] = sentences.map(sentence => {
-      const sWords = sentence.trim().split(/\s+/).filter(Boolean);
-      const len = sWords.length;
-      
-      // Compute sentence regularity indicator:
-      // Repetitive mid-length sentences (16-24 words) with low overall burstiness show higher uniformity
-      let uniformityIndicator = 35;
-      if (len >= 16 && len <= 24) uniformityIndicator += 15;
-      if (cv < 0.25) uniformityIndicator += 15;
-      if (entropy < 4.0) uniformityIndicator += 10;
-      if (cv > 0.5) uniformityIndicator -= 15;
-
-      const boundedScore = Math.min(90, Math.max(10, uniformityIndicator));
-      const flag = boundedScore >= 60 ? 'ai' : boundedScore >= 40 ? 'mixed' : 'human';
-
-      return {
-        text: sentence,
-        aiLikelihood: boundedScore,
-        flag
-      };
-    });
-
-    // Compute composite statistical regularity index (explicitly labeled as a heuristic proxy)
-    const avgScore = Math.round(
-      sentenceScores.reduce((a, b) => a + b.aiLikelihood, 0) / (sentenceScores.length || 1)
-    );
-    const humanPct = 100 - avgScore;
-
-    const response: AiDetectionResponse = {
-      aiPercentage: avgScore,
-      humanPercentage: humanPct,
-      confidence: sentences.length >= 4 ? 'Moderate' : 'Low',
-      overallVerdict: avgScore >= 65 
-        ? 'Likely AI-Generated' 
-        : avgScore >= 40 
-          ? 'Mixed Signals' 
-          : 'Likely Human-Written',
-      sentences: sentenceScores,
-      metrics: {
-        entropyScore: Math.round(Math.min(100, entropy * 15)),
-        burstinessScore: Math.round(Math.min(100, cv * 100)),
-        shannonEntropy: parseFloat(entropy.toFixed(3)),
-        sentenceLengthCV: parseFloat(cv.toFixed(3)),
-        typeTokenRatio: ttr
-      },
-      experimentalStatus: true,
-      analyzerType: 'statistical_heuristic',
-      falsePositiveRisk: 'High on structured academic, technical, legal, and non-native English writing where consistent sentence structure and controlled vocabulary are standard.',
-      disclaimer: 'EXPERIMENTAL STATISTICAL LINGUISTIC ANALYZER: This tool evaluates statistical surface regularity (Shannon entropy, sentence-length CV, and lexical diversity). It is NOT a validated neural classifier and cannot provide certainty of authorship. Never use this score for disciplinary or academic penalty decisions.'
-    };
-
-    return res.json(response);
+    const { text, model } = aiDetectorSchema.parse(req.body);
+    if (wantsStream(req)) stream = openSse(res);
+    const result = await detectAiText(text, { model, signal, onStatus: message => stream?.send('status', { message }) });
+    return finish(res, stream, result);
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+    if (signal.aborted || isAbortError(error)) {
+      stream?.end();
+      return;
     }
-    return res.status(500).json({ error: 'AI detection analysis failed' });
+    if (error instanceof z.ZodError) {
+      return fail(res, stream, 400, error.errors[0].message);
+    }
+    console.error('AI detection error:', error?.message || error);
+    return fail(res, stream, 500, 'AI detection analysis failed');
   }
 });
 
 // ----------------------------------------------------
-// 2. Plagiarism Checker Endpoint (Modular Inverted Index & Shingles)
+// 2. Plagiarism Checker Endpoint (free web, Wikipedia & scholarly search + local library)
 // ----------------------------------------------------
 const plagiarismSchema = z.object({
-  text: z.string().min(10, 'Text too short for plagiarism check').max(1000000)
+  text: z.string().min(10, 'Text too short for plagiarism check').max(300000, 'Text exceeds the 300,000 character limit per scan'),
+  excludeQuotes: z.boolean().optional().default(false)
 });
 
-originalityRouter.post('/plagiarism', (req: Request, res: Response) => {
+originalityRouter.post('/plagiarism', async (req: Request, res: Response) => {
+  const signal = abortOnClientDisconnect(res);
+  let stream: SseChannel | null = null;
   try {
-    const { text } = plagiarismSchema.parse(req.body);
-    const result = defaultCorpusManager.checkSimilarity(text, 5);
-
-    const response: PlagiarismCheckResponse = {
-      similarityScore: result.similarityScore,
-      uniquenessScore: result.uniquenessScore,
-      totalWordsChecked: result.totalWordsChecked,
-      matchedSources: result.matchedSources,
-      matchedSegments: result.matchedSegments.map(s => ({
-        text: s.text,
-        sourceTitle: s.sourceTitle,
-        sourceUrl: s.sourceUrl,
-        start: s.startInInput,
-        end: s.endInInput
-      })),
-      corpusStats: result.corpusStats
-    };
-
-    return res.json(response);
+    const { text, excludeQuotes } = plagiarismSchema.parse(req.body);
+    if (wantsStream(req)) stream = openSse(res);
+    const report = await scanForPlagiarism(text, {
+      excludeQuotes,
+      signal,
+      onStatus: message => stream?.send('status', { message })
+    });
+    return finish(res, stream, report);
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+    if (signal.aborted || isAbortError(error)) {
+      stream?.end();
+      return;
     }
-    return res.status(500).json({ error: 'Plagiarism check failed' });
+    if (error instanceof z.ZodError) {
+      return fail(res, stream, 400, error.errors[0].message);
+    }
+    console.error('Plagiarism scan error:', error?.message || error);
+    return fail(res, stream, 500, 'Plagiarism check failed');
   }
 });
 
@@ -206,9 +137,14 @@ const indexDocumentSchema = z.object({
         if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
         const host = u.hostname.toLowerCase();
         // SSRF prevention: reject localhost, loopback, link-local, and private RFC1918 subnets
-        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '169.254.169.254' || host === '::1') {
+        // URL.hostname keeps IPv6 brackets ("[::1]")
+        if (host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || host === '[::]') {
           return false;
         }
+        if (/^(127|0)\.\d+\.\d+\.\d+$/.test(host)) return false; // loopback, "this network"
+        if (/^169\.254\.\d+\.\d+$/.test(host)) return false; // link-local incl. cloud metadata
+        if (/^\[(f[cd]|fe[89ab])[0-9a-f]*:/.test(host)) return false; // IPv6 unique-local / link-local
+        if (/^\[::ffff:/.test(host)) return false; // IPv4-mapped IPv6
         if (/^10\.\d+\.\d+\.\d+$/.test(host)) return false;
         if (/^192\.168\.\d+\.\d+$/.test(host)) return false;
         if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host)) return false;

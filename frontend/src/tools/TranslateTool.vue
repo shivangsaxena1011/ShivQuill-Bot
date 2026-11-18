@@ -101,16 +101,26 @@ const result = ref<TranslateResult | null>(null);
 const req = useRequest();
 const live = useLiveText();
 
-const targetName = computed(() => languages.value.find(l => l.code === target.value)?.name || 'Translation');
+const langName = (code: string) => languages.value.find(l => l.code === code)?.name || 'Translation';
+// Language of the request in flight (the dropdown may change while it runs)
+const pendingTarget = ref('es');
+// Labels describe the text actually shown, not whatever the dropdown says now
+const shownLang = computed(() => (req.loading.value ? pendingTarget.value : result.value?.targetLang || target.value));
+const targetName = computed(() => langName(shownLang.value));
 const rtl = computed(() => RTL.includes(result.value?.targetLang || ''));
-const rtlTarget = computed(() => RTL.includes(target.value));
+const rtlTarget = computed(() => RTL.includes(pendingTarget.value));
 
 function swap() {
   if (source.value === 'auto') return;
-  [source.value, target.value] = [target.value, source.value];
   if (result.value) {
+    // Swap around the shown translation: its language becomes the source
+    const from = source.value;
+    source.value = result.value.targetLang;
+    target.value = from;
     input.value = result.value.translatedText;
     result.value = null;
+  } else {
+    [source.value, target.value] = [target.value, source.value];
   }
 }
 
@@ -121,10 +131,12 @@ async function run() {
   const terms = glossary.value
     .map(g => ({ source: g.source.trim(), target: g.target.trim() }))
     .filter(g => g.source && g.target);
-  const r = await req.run(signal => api.translate(text, source.value, target.value, terms, { signal, onDelta: live.append }));
+  const to = target.value;
+  pendingTarget.value = to;
+  const r = await req.run(signal => api.translate(text, source.value, to, terms, { signal, onDelta: live.append }));
   if (r) {
     result.value = r;
-    addHistory({ tool: 'translate', label: `Translate → ${targetName.value}`, input: text, output: r.translatedText });
+    addHistory({ tool: 'translate', label: `Translate → ${langName(r.targetLang || to)}`, input: text, output: r.translatedText });
   }
 }
 </script>

@@ -200,8 +200,8 @@ const groups: { title: string; tools: ToolDef[] }[] = [
   {
     title: 'Verify',
     tools: [
-      { id: 'detector', name: 'AI Pattern Check', short: 'AI check', description: 'Experimental statistics on how uniform the writing looks.', icon: ScanSearch, component: DetectorTool },
-      { id: 'plagiarism', name: 'Plagiarism Check', short: 'Plagiarism', description: 'Compare text with the indexed reference library.', icon: ShieldCheck, component: PlagiarismTool },
+      { id: 'detector', name: 'AI Detector', short: 'AI check', description: 'Sentence-by-sentence estimate of AI-generated and AI-refined writing.', icon: ScanSearch, component: DetectorTool },
+      { id: 'plagiarism', name: 'Plagiarism Checker', short: 'Plagiarism', description: 'Search the web, Wikipedia and papers for copied or reworded passages.', icon: ShieldCheck, component: PlagiarismTool },
       { id: 'citation', name: 'Citation Generator', short: 'Cite', description: 'APA, MLA, Chicago and Harvard references from a DOI or ISBN, with BibTeX/RIS export.', icon: Quote, component: CitationTool }
     ]
   },
@@ -235,9 +235,11 @@ function isTyping(e: KeyboardEvent) {
   const el = e.target as HTMLElement | null;
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 }
+// On macOS Option+digit types characters (#, €, ™, £…), so it must not be stolen while typing
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
 function onGlobalKey(e: KeyboardEvent) {
   const mod = e.ctrlKey || e.metaKey;
-  if (e.altKey && !mod && /^Digit[0-9]$/.test(e.code)) {
+  if (e.altKey && !mod && /^Digit[0-9]$/.test(e.code) && !(IS_MAC && isTyping(e))) {
     const n = Number(e.code.slice(5));
     const tool = allTools[n === 0 ? 9 : n - 1];
     if (tool) {

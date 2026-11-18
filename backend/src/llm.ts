@@ -10,12 +10,15 @@ let openaiClient: OpenAI | null = null;
 export class ProviderError extends Error {
   public readonly status?: number;
   public readonly retryable: boolean;
+  /** A message that is safe and useful to show the client verbatim (no upstream details). */
+  public readonly clientMessage?: string;
 
-  constructor(message: string, options: { status?: number; retryable?: boolean } = {}) {
+  constructor(message: string, options: { status?: number; retryable?: boolean; clientMessage?: string } = {}) {
     super(message);
     this.name = 'ProviderError';
     this.status = options.status;
     this.retryable = options.retryable ?? false;
+    this.clientMessage = options.clientMessage;
   }
 }
 
@@ -104,6 +107,60 @@ const REASONING_MAX_COMPLETION_TOKENS = 16384;
 /** Models that emit hidden reasoning tokens before the visible answer. */
 export function isReasoningModel(model: string): boolean {
   return /(^|\/)gpt-oss-/i.test(model);
+}
+
+/**
+ * Wraps a token callback so `<think>...</think>` reasoning (emitted inline by qwen3 / deepseek-r1 on
+ * providers without a hidden-reasoning option) is never streamed to the client. Tags may be split
+ * across deltas, so a possible partial tag at the end of a delta is held back until the next one.
+ */
+export function createThinkFilter(onToken: (delta: string) => void): ((delta: string) => void) & { flush: () => void } {
+  const OPEN = '<think>';
+  const CLOSE = '</think>';
+  let buffer = '';
+  let inThink = false;
+
+  const partialTagLength = (s: string, tag: string): number => {
+    for (let k = Math.min(tag.length - 1, s.length); k > 0; k--) {
+      if (tag.startsWith(s.slice(-k).toLowerCase())) return k;
+    }
+    return 0;
+  };
+
+  const drain = (final: boolean) => {
+    while (buffer) {
+      const lower = buffer.toLowerCase();
+      if (inThink) {
+        const end = lower.indexOf(CLOSE);
+        if (end === -1) {
+          // Discard reasoning, but keep a possible partial closing tag
+          buffer = final ? '' : buffer.slice(buffer.length - partialTagLength(buffer, CLOSE));
+          return;
+        }
+        buffer = buffer.slice(end + CLOSE.length);
+        inThink = false;
+      } else {
+        const start = lower.indexOf(OPEN);
+        if (start === -1) {
+          const hold = final ? 0 : partialTagLength(buffer, OPEN);
+          const out = buffer.slice(0, buffer.length - hold);
+          if (out) onToken(out);
+          buffer = buffer.slice(buffer.length - hold);
+          return;
+        }
+        if (start > 0) onToken(buffer.slice(0, start));
+        buffer = buffer.slice(start + OPEN.length);
+        inThink = true;
+      }
+    }
+  };
+
+  const emit = ((delta: string) => {
+    buffer += delta;
+    drain(false);
+  }) as ((delta: string) => void) & { flush: () => void };
+  emit.flush = () => drain(true);
+  return emit;
 }
 
 /** Groq-hosted models that would otherwise put `<think>...</think>` reasoning inside the content. */
@@ -212,7 +269,6 @@ export async function executeChatCompletion(
 
   const client = getClient();
   const model = modelOverride || getDefaultModel();
-  let emptyCompletion = false;
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -237,6 +293,7 @@ export async function executeChatCompletion(
     let text = '';
     finishReason = undefined;
     if (onToken) {
+      const emit = createThinkFilter(onToken);
       const stream = await client.chat.completions.create(
         { model, temperature, messages, stream: true, ...reasoningParams, ...formatParams },
         { signal: abortSignal }
@@ -246,9 +303,10 @@ export async function executeChatCompletion(
         const delta = part.choices[0]?.delta?.content || '';
         if (delta) {
           text += delta;
-          onToken(delta);
+          emit(delta);
         }
       }
+      emit.flush();
     } else {
       const response = await client.chat.completions.create(
         { model, temperature, messages, ...reasoningParams, ...formatParams },
@@ -260,25 +318,27 @@ export async function executeChatCompletion(
     return text;
   };
 
-  try {
-    let content: string;
+  const requestWithJsonRecovery = async (): Promise<string> => {
     try {
-      content = await requestOnce();
+      return await requestOnce();
     } catch (err: any) {
       // In JSON mode Groq rejects output that is not strictly valid JSON (400 json_validate_failed)
       // but returns the generation itself; hand it to the caller's tolerant parser instead of failing.
       const failed = err?.error?.failed_generation ?? err?.error?.error?.failed_generation;
       if (options.json && err?.status === 400 && typeof failed === 'string' && failed.trim()) {
         console.warn(`[ShivQuill LLM] '${model}' produced invalid strict JSON; using its raw generation.`);
-        content = failed;
-      } else {
-        throw err;
+        return failed;
       }
+      throw err;
     }
+  };
+
+  try {
+    let content = await requestWithJsonRecovery();
     // An empty answer emitted nothing to the stream, so one retry is safe and invisible to the user.
     if (!content.trim() && !abortSignal?.aborted) {
       console.warn(`[ShivQuill LLM] Empty completion from '${model}', retrying once...`);
-      content = await requestOnce();
+      content = await requestWithJsonRecovery();
     }
 
     // A cut-off answer would silently drop the end of a chunk, so it must not pass as success
@@ -296,13 +356,14 @@ export async function executeChatCompletion(
 
     if (!content) {
       // Already retried once above; another retry by the caller would only multiply calls
-      emptyCompletion = true;
       throw new Error('AI Provider returned an empty completion response.');
     }
 
     return content;
   } catch (error: any) {
-    if (error.name === 'AbortError' || abortSignal?.aborted || error.message?.includes('aborted')) {
+    // Only a real cancellation counts: an upstream error whose text merely contains "aborted"
+    // (e.g. a reset connection) must surface as a provider error, not a silent user cancel.
+    if (abortSignal?.aborted || error?.name === 'AbortError' || error?.name === 'APIUserAbortError') {
       const abortErr = new Error('The operation was aborted');
       abortErr.name = 'AbortError';
       throw abortErr;
@@ -310,7 +371,7 @@ export async function executeChatCompletion(
 
     if (error instanceof IncompleteCompletionError) {
       console.warn(`[ShivQuill LLM] '${model}' stopped early: finish_reason=${error.finishReason}`);
-      throw new ProviderError(error.message, { retryable: false });
+      throw new ProviderError(error.message, { retryable: false, clientMessage: error.message });
     }
 
     // Automatic fallback for Groq when the configured model is unavailable (e.g. retired, 404)
@@ -330,7 +391,8 @@ export async function executeChatCompletion(
     // Transport/HTTP failures were already retried by the SDK, so only an empty completion is retryable.
     throw new ProviderError(
       `AI Provider Error (${config.requestType}): ${error.message || 'Upstream completion failed'}`,
-      { status: typeof error.status === 'number' ? error.status : undefined, retryable: emptyCompletion }
+      // Empty completions were already retried once above, so callers must not multiply attempts
+      { status: typeof error.status === 'number' ? error.status : undefined, retryable: false }
     );
   }
 }
@@ -369,6 +431,20 @@ export function executeSimulatedLlmCompletion(systemPrompt: string, userPrompt: 
         `In short, ${base.charAt(0).toLowerCase()}${base.slice(1)}.`,
         `${base}, as noted.`
       ]
+    });
+  }
+
+  // AI detector simulation: stock AI phrasing scores high, personal/concrete writing low
+  if (systemPrompt.includes('AI TEXT FORENSICS')) {
+    const lines = [...userPrompt.matchAll(/^\[(\d+)\]\s*(.+)$/gm)];
+    return JSON.stringify({
+      summary: 'Simulated classification.',
+      sentences: lines.map(([, i, s]) => {
+        const aiLike = /\b(furthermore|moreover|delv|tapestry|testament|pivotal|crucial|in conclusion|landscape|leverag|seamless)/i.test(s);
+        const human = /\b(i|my|we|our)\b|'|’|\d/i.test(s);
+        const ai = aiLike ? 88 : human ? 12 : 45;
+        return { i: Number(i), label: ai >= 70 ? 'ai' : ai >= 40 ? 'human_refined' : 'human', ai, reason: aiLike ? 'Stock AI transitions' : 'Personal, concrete detail' };
+      })
     });
   }
 

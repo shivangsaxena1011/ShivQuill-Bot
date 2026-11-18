@@ -178,7 +178,7 @@ describe('Metrics', () => {
   });
 
   it('detector exposes entropyScore instead of a fake perplexity', async () => {
-    const res = await post('/api/originality/detector', { text: 'This is a reasonably long sentence for analysis. Another sentence follows it here.' });
+    const res = await post('/api/originality/detector', { text: 'This is a reasonably long sentence for analysis. Another sentence follows it here, with a few more words. We wrote this paragraph on a rainy Tuesday afternoon while waiting for the bus, and it keeps going so the detector has at least forty words to read.' });
     const json = await res.json();
     expect(json.metrics.entropyScore).toBeDefined();
     expect(json.metrics.perplexityScore).toBeUndefined();

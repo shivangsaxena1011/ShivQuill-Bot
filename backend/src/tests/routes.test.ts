@@ -156,7 +156,7 @@ describe('API Route Integration', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: 'Furthermore, it is crucial to remember that delving into this tapestry serves as a testament to our ongoing development.'
+        text: 'Furthermore, it is crucial to remember that delving into this tapestry serves as a testament to our ongoing development. Moreover, the framework ensures robust scalability across diverse environments. In conclusion, this approach delivers significant value to all stakeholders involved in the transformation.'
       })
     });
     expect(res.status).toBe(200);

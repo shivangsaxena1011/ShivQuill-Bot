@@ -21,15 +21,18 @@ export interface BatchedText {
 
 function findCut(window: string): number {
   const minCut = Math.floor(window.length * 0.3);
-  const candidates: RegExp[] = [/\n\s*\n/g, /\n/g, /[.!?]["')\]]?\s/g, /\s/g];
+  // CJK terminators (。！？) are not followed by spaces, so they get their own alternative
+  const SENTENCE = 2;
+  const candidates: RegExp[] = [/\n\s*\n/g, /\n/g, /[.!?]["')\]]?\s|[。！？]/g, /\s/g];
 
-  for (const pattern of candidates) {
+  for (let c = 0; c < candidates.length; c++) {
+    const pattern = candidates[c];
     let last = -1;
     let m: RegExpExecArray | null;
     pattern.lastIndex = 0;
     while ((m = pattern.exec(window)) !== null) {
       // For sentence endings keep the punctuation inside the batch
-      const idx = pattern.source.startsWith('[.!?]') ? m.index + m[0].trimEnd().length : m.index;
+      const idx = c === SENTENCE ? m.index + m[0].trimEnd().length : m.index;
       if (idx >= minCut) last = idx;
       if (m[0].length === 0) pattern.lastIndex++;
     }
@@ -54,6 +57,9 @@ export function splitIntoBatches(text: string, maxChars: number): BatchedText {
       cut = remaining;
     } else {
       cut = findCut(text.slice(pos, pos + limit));
+      // Never split a surrogate pair (emoji, rare CJK): a lone half becomes U+FFFD at the provider
+      const code = text.charCodeAt(pos + cut - 1);
+      if (cut > 1 && code >= 0xd800 && code <= 0xdbff) cut--;
     }
 
     let content = text.slice(pos, pos + cut);

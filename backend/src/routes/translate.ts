@@ -59,7 +59,14 @@ const languageCode = z
 
 const translateSchema = z.object({
   text: z.string().min(1, 'Input text cannot be empty').max(1000000, 'Input exceeds maximum payload limit of 1,000,000 characters'),
-  sourceLang: z.union([z.literal('auto'), languageCode]).default('auto'),
+  // One schema (not a union) so "AUTO"/" auto " are accepted and bad codes report "Unsupported language code"
+  sourceLang: z
+    .string()
+    .transform(v => v.trim().toLowerCase())
+    .refine(v => v === 'auto' || Object.prototype.hasOwnProperty.call(SUPPORTED_LANGUAGES, v), {
+      message: 'Unsupported language code'
+    })
+    .default('auto'),
   targetLang: languageCode.default('es'),
   // Fixed term translations the model must use (e.g. product names, domain jargon)
   glossary: z.array(z.object({

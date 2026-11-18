@@ -18,6 +18,18 @@ class TaskQueue {
     if (this.tasks.size >= this.maxCapacity) {
       this.cleanup(true); // Forced aggressive cleanup
     }
+    // Still full (all tasks are recent): evict the oldest finished tasks, then the oldest overall,
+    // so the map really stays bounded
+    if (this.tasks.size >= this.maxCapacity) {
+      for (const [id, task] of this.tasks) {
+        if (this.tasks.size < this.maxCapacity) break;
+        if (task.done) this.tasks.delete(id);
+      }
+      for (const id of this.tasks.keys()) {
+        if (this.tasks.size < this.maxCapacity) break;
+        this.tasks.delete(id);
+      }
+    }
 
     const id = uuidv4();
     const task: TaskStatus<T> = {

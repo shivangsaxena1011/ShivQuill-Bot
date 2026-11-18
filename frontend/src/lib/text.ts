@@ -112,9 +112,11 @@ export function highlightRanges(text: string, ranges: Array<{ start: number; end
   const parts: Array<{ text: string; mark: boolean; title?: string }> = [];
   let pos = 0;
   for (const r of sorted) {
-    if (r.start < pos) continue;
-    if (r.start > pos) parts.push({ text: text.slice(pos, r.start), mark: false });
-    parts.push({ text: text.slice(r.start, r.end), mark: true, title: r.title });
+    // Overlapping range: highlight only the part past what is already marked (don't drop it)
+    if (r.end <= pos) continue;
+    const start = Math.max(r.start, pos);
+    if (start > pos) parts.push({ text: text.slice(pos, start), mark: false });
+    parts.push({ text: text.slice(start, r.end), mark: true, title: r.title });
     pos = r.end;
   }
   if (pos < text.length) parts.push({ text: text.slice(pos), mark: false });
