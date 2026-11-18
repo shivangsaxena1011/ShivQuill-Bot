@@ -167,6 +167,43 @@ interface FoundCandidate {
   firstQuery: number;
 }
 
+/**
+ * One gate per provider, shared by every scan on this server: concurrency and the minimum interval
+ * between requests hold even when several users scan at the same time.
+ */
+interface Gate {
+  active: number;
+  nextSlot: number;
+  waiters: Array<() => void>;
+}
+const gates = new Map<string, Gate>();
+
+async function acquire(p: SearchProvider, signal: AbortSignal): Promise<(() => void) | null> {
+  let g = gates.get(p.id);
+  if (!g) gates.set(p.id, (g = { active: 0, nextSlot: 0, waiters: [] }));
+  const gate = g;
+  while (gate.active >= p.concurrency) {
+    if (signal.aborted) return null;
+    await new Promise<void>(resolve => {
+      gate.waiters.push(resolve);
+      signal.addEventListener('abort', () => resolve(), { once: true });
+    });
+  }
+  if (signal.aborted) return null;
+  gate.active++;
+  const release = () => {
+    gate.active--;
+    // wake everyone; they re-check the limit (stale resolvers from aborted scans are harmless)
+    const ws = gate.waiters;
+    gate.waiters = [];
+    ws.forEach(w => w());
+  };
+  const wait = gate.nextSlot - Date.now();
+  gate.nextSlot = Math.max(Date.now(), gate.nextSlot) + p.minIntervalMs;
+  await sleep(wait, signal);
+  return release;
+}
+
 async function runProvider(
   p: SearchProvider,
   queries: SearchQuery[],
@@ -176,8 +213,9 @@ async function runProvider(
   cov: ProviderCoverage
 ) {
   let next = 0;
-  let nextSlot = 0;
   let stop = false;
+  let answered = 0; // successful (or cached) answers, with or without results
+  let errors = 0;
   const resting = (cooldownUntil.get(p.id) || 0) - Date.now();
   if (resting > 0) {
     cov.status = 'rate_limited';
@@ -192,11 +230,10 @@ async function runProvider(
       const cacheKey = `${p.id}:${lang}:${q}`;
       let results = searchCache.get(cacheKey);
       if (!results) {
-        const wait = nextSlot - Date.now();
-        nextSlot = Math.max(Date.now(), nextSlot) + p.minIntervalMs;
-        await sleep(wait, signal);
-        if (signal.aborted || stop) return;
+        const release = await acquire(p, signal);
+        if (!release) return;
         try {
+          if (signal.aborted || stop || (cooldownUntil.get(p.id) || 0) > Date.now()) return;
           cov.queried++;
           results = await p.search(q, { lang, signal });
           searchCache.set(cacheKey, results, results.length ? 6 * 3600_000 : 1800_000);
@@ -210,12 +247,14 @@ async function runProvider(
             return;
           }
           if (signal.aborted) return;
-          cov.status = cov.results ? cov.status : 'failed';
+          errors++;
           cov.message = String(err?.message || err).slice(0, 160);
           continue;
+        } finally {
+          release();
         }
       }
-      if (results.length) cov.status = 'ok';
+      answered++;
       cov.results += results.length;
       for (const c of results) {
         const key = normalizeUrl(c.url);
@@ -231,8 +270,11 @@ async function runProvider(
     }
   };
   await Promise.all(Array.from({ length: p.concurrency }, worker));
-  if (cov.status === 'skipped') cov.status = cov.queried || cov.results ? 'no_results' : 'skipped';
-  if (signal.aborted && cov.status === 'no_results' && cov.queried < queries.length) cov.message = 'Search time budget reached';
+  if (cov.status === 'rate_limited' || cov.status === 'blocked') return;
+  // Decided once at the end: one transient error doesn't make the scan "partial" if other queries worked
+  cov.status = cov.results > 0 ? 'ok' : answered > 0 ? 'no_results' : errors > 0 ? 'failed' : 'skipped';
+  if (cov.status !== 'failed' && errors === 0) cov.message = undefined;
+  if (signal.aborted && answered + errors < queries.length && cov.status !== 'failed') cov.message = 'Search time budget reached';
 }
 
 async function loadText(cand: Candidate, signal: AbortSignal): Promise<{ text: string; snippetOnly: boolean }> {
@@ -268,6 +310,35 @@ async function loadText(cand: Candidate, signal: AbortSignal): Promise<{ text: s
 
 const pct = (part: number, whole: number) => (whole <= 0 || part <= 0 ? 0 : Math.max(1, Math.min(100, Math.round((part / whole) * 100))));
 
+/**
+ * Splits a rounded total (e.g. similarity 50%) across parts (identical/minor/paraphrased word counts)
+ * so the parts add up exactly to it (largest remainder); any non-zero part shows at least 1% when possible.
+ */
+function splitPercent(parts: number[], total: number): number[] {
+  const sum = parts.reduce((a, b) => a + b, 0);
+  if (!sum || !total) return parts.map(() => 0);
+  const exact = parts.map(p => (p / sum) * total);
+  const out = exact.map(Math.floor);
+  let rest = total - out.reduce((a, b) => a + b, 0);
+  const order = exact.map((v, i) => i).sort((a, b) => exact[b] - out[b] - (exact[a] - out[a]));
+  for (const i of order) {
+    if (rest <= 0) break;
+    out[i]++;
+    rest--;
+  }
+  // give tiny non-zero parts 1% taken from the largest part
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] > 0 && out[i] === 0) {
+      const big = out.indexOf(Math.max(...out));
+      if (out[big] > 1) {
+        out[big]--;
+        out[i] = 1;
+      }
+    }
+  }
+  return out;
+}
+
 export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): Promise<PlagiarismReport> {
   const t0 = Date.now();
   const status = (m: string) => opts.onStatus?.(m);
@@ -280,9 +351,12 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
   let excludedQuotedWords = 0;
   if (opts.excludeQuotes) {
     excludeMask = new Uint8Array(n);
+    // Tokens and quote ranges are both sorted: walk them together (linear)
     const ranges = quotedRanges(text);
+    let r = 0;
     input.tokens.forEach((t, i) => {
-      if (ranges.some(([s, e]) => t.start >= s && t.end <= e)) {
+      while (r < ranges.length && ranges[r][1] <= t.start) r++;
+      if (r < ranges.length && t.start >= ranges[r][0] && t.end <= ranges[r][1]) {
         excludeMask![i] = 1;
         excludedQuotedWords++;
       }
@@ -339,8 +413,8 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
 
   // ---- 3. compare -------------------------------------------------------------------------
   status(`Comparing your text with ${candidates.length} sources…`);
-  const overall = new Uint8Array(n);
-  const sources: Array<PlagiarismSource & { passages: ReturnType<typeof compareWithSource>['passages'] }> = [];
+  type Scored = PlagiarismSource & { passages: ReturnType<typeof compareWithSource>['passages']; mask: Uint8Array };
+  const sources: Scored[] = [];
   const seenUrl = new Set<string>();
   for (const cand of candidates) {
     const key = normalizeUrl(cand.c.url);
@@ -352,7 +426,6 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
       if (cmp.mask[i] === 3) identical++;
       else if (cmp.mask[i] === 2) minor++;
       else if (cmp.mask[i] === 1) para++;
-      if (cmp.mask[i] > overall[i]) overall[i] = cmp.mask[i];
     }
     const matched = identical + minor + para;
     if (matched < 8) continue;
@@ -369,26 +442,40 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
       paraphrasedWords: para,
       snippetOnly: cand.snippetOnly,
       matchedText: cmp.passages[0]?.sourceExcerpt || '',
-      passages: cmp.passages
+      passages: cmp.passages.filter(p => !excludeMask || !excludeMask.subarray(p.t0, p.t1).every(Boolean)),
+      mask: cmp.mask
     });
   }
   sources.sort((a, b) => b.matchedWords - a.matchedWords || b.identicalWords - a.identicalWords);
-  const top = sources.slice(0, 30);
-  top.forEach((s, i) => (s.id = `src-${i + 1}`));
+  const ranked30 = sources.slice(0, 30);
 
-  const segments: PlagiarismSegment[] = [];
-  for (const s of top) {
-    for (const p of s.passages) {
-      if (segments.length >= MAX_SEGMENTS) break;
+  // Share the passage budget round-robin so every listed source has highlights to show
+  const perSource = new Map<Scored, PlagiarismSegment[]>(ranked30.map(s => [s, []]));
+  let used = 0;
+  for (let round = 0; used < MAX_SEGMENTS; round++) {
+    let added = false;
+    for (const s of ranked30) {
+      const p = s.passages[round];
+      if (!p || used >= MAX_SEGMENTS) continue;
       const start = input.tokens[p.t0].start;
       const end = input.tokens[p.t1 - 1].end;
-      if (excludeMask && [...excludeMask.subarray(p.t0, p.t1)].every(Boolean)) continue;
-      segments.push({ text: text.slice(start, end), start, end, sourceId: s.id, sourceTitle: s.title, sourceUrl: s.url, matchType: p.type, sourceExcerpt: p.sourceExcerpt });
+      perSource.get(s)!.push({ text: text.slice(start, end), start, end, sourceId: '', sourceTitle: s.title, sourceUrl: s.url, matchType: p.type, sourceExcerpt: p.sourceExcerpt });
+      used++;
+      added = true;
     }
+    if (!added) break;
   }
+  const top = ranked30.filter(s => perSource.get(s)!.length > 0);
+  const segments: PlagiarismSegment[] = [];
+  top.forEach((s, i) => {
+    s.id = `src-${i + 1}`;
+    for (const seg of perSource.get(s)!) segments.push({ ...seg, sourceId: s.id });
+  });
   segments.sort((a, b) => a.start - b.start);
 
-  // Words only count once overall, at their strongest match type
+  // The overall score only counts words explained by a listed source, once, at their strongest type
+  const overall = new Uint8Array(n);
+  for (const s of top) for (let i = 0; i < n; i++) if (s.mask[i] > overall[i]) overall[i] = s.mask[i];
   let identical = 0, minor = 0, para = 0;
   for (let i = 0; i < n; i++) {
     if (overall[i] === 3) identical++;
@@ -397,6 +484,7 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
   }
   const matchedWords = identical + minor + para;
   const similarity = pct(matchedWords, n);
+  const [identicalPct, minorPct, paraPct] = splitPercent([identical, minor, para], similarity);
 
   const failed = coverage.filter(c => c.status === 'rate_limited' || c.status === 'blocked' || c.status === 'failed');
   const searched = coverage.filter(c => c.status === 'ok' || c.status === 'no_results').map(c => c.label);
@@ -413,8 +501,8 @@ export async function scanForPlagiarism(text: string, opts: ScanOptions = {}): P
     uniquenessScore: matchedWords ? 100 - similarity : 100,
     totalWordsChecked: n,
     matchedWords,
-    breakdown: { identical: pct(identical, n), minorChanges: pct(minor, n), paraphrased: pct(para, n) },
-    matchedSources: top.map(({ passages, ...s }) => s),
+    breakdown: { identical: identicalPct, minorChanges: minorPct, paraphrased: paraPct },
+    matchedSources: top.map(({ passages, mask, ...s }) => s),
     matchedSegments: segments,
     excludedQuotedWords,
     corpusStats: {

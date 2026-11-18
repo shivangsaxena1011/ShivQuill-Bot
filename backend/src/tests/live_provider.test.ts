@@ -3,7 +3,8 @@ import { config } from '../config.js';
 import { executeLlmCompletion } from '../llm.js';
 
 describe('Live AI Provider Verification Suite', () => {
-  const hasLiveApiKey = !!(
+  // Live calls only when explicitly enabled (LIVE_PROVIDER_TESTS=1); otherwise tests run in mock mode
+  const hasLiveApiKey = config.requestType !== 'MOCK' && !!(
     process.env.GROQ_API_KEY ||
     process.env.OPENAI_API_KEY ||
     process.env.OPENROUTER_API_KEY ||
@@ -16,7 +17,7 @@ describe('Live AI Provider Verification Suite', () => {
       console.log('[CODE-VERIFIED — LIVE INFERENCE NOT VERIFIED]');
       console.log('Reason: No remote AI provider API key found in execution environment.');
       console.log('Source code, schema validations, and streaming pipelines are verified.');
-      console.log('To run live generation, provide GROQ_API_KEY or OPENAI_API_KEY in .env.');
+      console.log('To run live generation: set a key with `npm run setup:keys`, then run tests with LIVE_PROVIDER_TESTS=1.');
       console.log('--------------------------------------------------------------\n');
       expect(true).toBe(true);
       return;

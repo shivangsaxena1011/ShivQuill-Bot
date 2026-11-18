@@ -7,6 +7,7 @@ import { defaultCorpusManager } from '../corpus.js';
 import { formatCitation, parseAuthorName, CitationSource, CitationAuthor } from '../citation.js';
 import { scanForPlagiarism } from '../plagiarism/engine.js';
 import { detectAiText, MIN_WORDS } from '../aiDetector.js';
+import { countWords } from '../plagiarism/text.js';
 import { abortOnClientDisconnect, isAbortError } from '../requestAbort.js';
 import { wantsStream, openSse, finish, fail, SseChannel } from '../sse.js';
 
@@ -51,7 +52,7 @@ const aiDetectorSchema = z.object({
   text: z
     .string()
     .max(200000, 'Text exceeds the 200,000 character limit per scan')
-    .refine(t => (t.match(/[\p{L}\p{M}\p{N}]+/gu) || []).length >= MIN_WORDS, `Add at least ${MIN_WORDS} words so the detector has enough text to analyze`),
+    .refine(t => countWords(t) >= MIN_WORDS,`Add at least ${MIN_WORDS} words so the detector has enough text to analyze`),
   model: z.string().optional()
 });
 

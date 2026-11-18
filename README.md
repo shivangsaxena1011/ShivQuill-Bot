@@ -81,6 +81,12 @@ Operating on a strict **Zero-Mock Policy**, every writing tool integrates with r
 
 ---
 
+## 🔑 API Keys
+
+Run `npm run setup:keys` to add your AI model key (Groq, OpenAI, OpenRouter or a custom endpoint) and optional plagiarism search keys (Google, Brave, SearXNG, OpenAlex) to `.env`. `npm run check:keys` shows what is set. For Render and the full list, see [docs/api-keys.md](docs/api-keys.md).
+
+---
+
 ## 🏛️ System Architecture
 
 ```

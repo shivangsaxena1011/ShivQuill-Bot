@@ -21,7 +21,17 @@
         </div>
         <div v-if="result" class="pane-body output-text">
           <template v-for="(p, i) in pieces" :key="i">
-            <span v-if="p.s" :class="`c-${p.s.label}`" :title="`${labelText(p.s.label)} · ${p.s.aiLikelihood}%${p.s.reason ? ' — ' + p.s.reason : ''}`">{{ p.text }}</span>
+            <span
+              v-if="p.s"
+              :class="[`c-${p.s.label}`, 'sentence-pick', { picked: picked === p.s }]"
+              :title="`${labelText(p.s.label)} · ${p.s.aiLikelihood}%${p.s.reason ? ' — ' + p.s.reason : ''}`"
+              tabindex="0"
+              role="button"
+              :aria-label="`${labelText(p.s.label)}, ${p.s.aiLikelihood}%. Show why`"
+              @click="picked = p.s"
+              @keydown.enter.prevent="picked = p.s"
+              @keydown.space.prevent="picked = p.s"
+            >{{ p.text }}</span>
             <span v-else>{{ p.text }}</span>
           </template>
           <p v-if="result.truncated" class="faint small" style="margin-top: 10px">
@@ -63,6 +73,15 @@
           </div>
 
           <p class="small">{{ result.summary }}</p>
+
+          <div v-if="picked" class="explainer" :class="picked.label" aria-live="polite">
+            <div class="spread tiny" style="margin-bottom: 4px">
+              <strong>Selected sentence · {{ labelText(picked.label) }}</strong>
+              <button class="btn btn-ghost btn-sm" type="button" style="padding: 0 6px" @click="picked = null">Close</button>
+            </div>
+            <div class="muted">“{{ picked.text.length > 220 ? picked.text.slice(0, 217) + '…' : picked.text }}”</div>
+            <div style="margin-top: 4px">{{ picked.aiLikelihood }}% AI likelihood{{ picked.reason ? ` — ${picked.reason}` : '' }}</div>
+          </div>
 
           <div class="bar-rows">
             <div v-for="b in breakdownRows" :key="b.label" class="bar-row">
@@ -117,7 +136,7 @@ import StatusBits from '../components/StatusBits.vue';
 import { api, type AiLabel, type DetectorResult } from '../api';
 import { useRequest } from '../composables/useRequest';
 import { useToolInput } from '../store';
-import { wordCount } from '../lib/text';
+import { analysisWordCount } from '../lib/text';
 
 const MIN_WORDS = 40;
 const SAMPLE_AI =
@@ -127,13 +146,20 @@ const SAMPLE_HUMAN =
 
 const input = useToolInput('detector', SAMPLE_AI);
 const result = ref<DetectorResult | null>(null);
+const picked = ref<DetectorResult['sentences'][number] | null>(null);
 const checkedText = ref('');
 const status = ref('');
 const req = useRequest();
 // A result only describes the text it was run on (e.g. text loaded from the Library replaces it)
-watch(input, () => (result.value = null));
+// New text during a scan cancels that scan, so its result can't land on the wrong document.
+watch(input, () => {
+  if (req.loading.value) req.cancel();
+  result.value = null;
+});
+watch(result, () => (picked.value = null));
 
-const words = computed(() => wordCount(input.value));
+// Counted like the server does (so the button agrees with the backend, incl. Chinese/Japanese/Thai)
+const words = computed(() => analysisWordCount(input.value));
 
 // Sentences carry exact offsets, so the original text (with its spacing and line breaks) is kept
 const pieces = computed(() => {
@@ -172,7 +198,8 @@ async function run() {
   const text = input.value;
   status.value = '';
   const r = await req.run(signal => api.detector(text, { signal, onStatus: m => (status.value = m) }));
-  if (r) {
+  // Only show the result if it still describes the text in the box
+  if (r && input.value === text) {
     checkedText.value = text;
     result.value = r;
   }

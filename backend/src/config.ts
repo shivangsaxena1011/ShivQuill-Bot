@@ -1,5 +1,14 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// The project-root .env (written by `npm run setup:keys`) is the single source of truth, whether the
+// server is started from the root (npm start) or from backend/ (npm run dev). Earlier files win;
+// real environment variables (e.g. the Render dashboard) always win over any file.
+const here = path.dirname(fileURLToPath(import.meta.url));
+for (const file of [path.resolve(here, '../../.env'), path.resolve(here, '../.env'), path.resolve(process.cwd(), '.env')]) {
+  dotenv.config({ path: file });
+}
 
 export type RequestType = 'GROQ' | 'OPENROUTER' | 'OPENAI' | 'CUSTOM' | 'MOCK' | 'UNCONFIGURED';
 
@@ -7,6 +16,10 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 const explicitRequestType = process.env.REQUEST_TYPE ? process.env.REQUEST_TYPE.toUpperCase() as RequestType : undefined;
 
 function resolveRequestType(): RequestType {
+  // The test suite never spends real API credit just because keys are saved in .env;
+  // opt in explicitly with LIVE_PROVIDER_TESTS=1
+  if (nodeEnv === 'test' && process.env.LIVE_PROVIDER_TESTS !== '1') return 'MOCK';
+
   // ZERO-MOCK POLICY: Production environments unconditionally reject MOCK
   if (explicitRequestType === 'MOCK') {
     if (nodeEnv === 'production') {

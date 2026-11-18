@@ -18,6 +18,7 @@ import { chatRouter } from './routes/chat.js';
 import { tasksRouter } from './routes/tasks.js';
 import { suggestionsRouter } from './routes/suggestions.js';
 import { toneRouter } from './routes/tone.js';
+import { configuredProviders } from './plagiarism/providers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -165,7 +166,13 @@ app.get('/api/health', (req: Request, res: Response) => {
     engineStatus: isMock ? 'mock_test' : isUnconfigured ? 'unconfigured' : 'active',
     isMockMode: isMock,
     isUnconfigured: isUnconfigured,
-    providerMessage: providerStatus.message
+    providerMessage: providerStatus.message,
+    // Which plagiarism sources this server will search (names only, never keys)
+    plagiarismSearch: {
+      online: process.env.PLAGIARISM_ONLINE !== 'false' && config.env !== 'test',
+      sources: configuredProviders().map(p => p.label),
+      openAlexKey: Boolean(process.env.OPENALEX_API_KEY)
+    }
   });
 });
 

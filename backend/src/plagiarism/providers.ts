@@ -53,8 +53,8 @@ export interface SearchProvider {
 const UA = `ShivQuill-PlagiarismChecker/2.4${process.env.PLAGIARISM_CONTACT ? ` (${process.env.PLAGIARISM_CONTACT})` : ''}`;
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
-async function getJson(url: string, signal: AbortSignal, headers: Record<string, string> = {}, timeoutMs = 9000): Promise<any> {
-  const r = await safeFetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', ...headers }, signal, timeoutMs, maxBytes: 3_000_000 });
+async function getJson(url: string, signal: AbortSignal, headers: Record<string, string> = {}, timeoutMs = 9000, allowPrivateNetwork = false): Promise<any> {
+  const r = await safeFetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', ...headers }, signal, timeoutMs, maxBytes: 3_000_000, allowPrivateNetwork });
   if (r.status === 429) {
     const retry = parseInt(String(r.headers['retry-after'] || ''), 10);
     throw new ProviderBlockedError('rate_limited', 'Rate limited', Number.isFinite(retry) ? retry : undefined);
@@ -122,14 +122,21 @@ export const duckDuckGoProvider: SearchProvider = {
     }
     if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
     const out: Candidate[] = [];
-    const blocks = r.body.split(/<div[^>]+class="[^"]*\bresult\b[^"]*"/i).slice(1);
+    // Split *before* each result div (lookahead) so its class attribute stays in the block for the ad check
+    const blocks = r.body.split(/(?=<div[^<>]+class="[^"]*\bresult\b[^"]*")/i).slice(1);
     for (const block of blocks) {
-      if (/result--ad\b/.test(block.slice(0, 200))) continue;
+      if (/result--ad\b/.test(block.slice(0, 300))) continue;
       const a = block.match(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
       if (!a) continue;
       let href = decodeEntities(a[1]);
       const uddg = href.match(/[?&]uddg=([^&]+)/);
-      if (uddg) href = decodeURIComponent(uddg[1]);
+      if (uddg) {
+        try {
+          href = decodeURIComponent(uddg[1]);
+        } catch {
+          continue; // malformed redirect link: skip this result, keep the others
+        }
+      }
       if (href.startsWith('//')) href = 'https:' + href;
       if (!/^https?:\/\//i.test(href) || /duckduckgo\.com\/y\.js/.test(href)) continue;
       const snippet = block.match(/class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i)?.[1];
@@ -257,7 +264,8 @@ export const searxngProvider = (base: string): SearchProvider => ({
   concurrency: 2,
   minIntervalMs: 300,
   async search(query, { signal }) {
-    const data = await getJson(`${base.replace(/\/$/, '')}/search?format=json&q=${encodeURIComponent(query)}`, signal);
+    // SEARXNG_URL is set by the server admin and is often a local container (http://localhost:8080)
+    const data = await getJson(`${base.replace(/\/$/, '')}/search?format=json&q=${encodeURIComponent(query)}`, signal, {}, 9000, true);
     return (data?.results || []).slice(0, 6).map((r: any) => webResult(r.url, r.title, r.content || '')).filter(Boolean) as Candidate[];
   }
 });

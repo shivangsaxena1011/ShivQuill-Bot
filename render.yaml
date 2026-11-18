@@ -26,3 +26,12 @@ services:
         value: "30"
       - key: MAX_CHARS_PER_REQUEST
         value: "12000"
+      # Optional plagiarism search keys (set the values in the dashboard; see docs/api-keys.md)
+      - key: OPENALEX_API_KEY
+        sync: false
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
+      - key: GOOGLE_CSE_KEY
+        sync: false
+      - key: GOOGLE_CSE_ID
+        sync: false

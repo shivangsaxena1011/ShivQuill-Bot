@@ -142,8 +142,20 @@ function splitSentences(text: string): Sent[] {
   const tokens = tokenize(text);
   const spans = sentenceSpans(text, tokens);
   const out: Sent[] = [];
+  const MAX_SENTENCE_WORDS = 60;
   for (const s of spans) {
     const words = s.t1 - s.t0;
+    // Text without punctuation would be one giant "sentence": cut it into ~40-word pieces so the
+    // word cap, batching and per-sentence scores still work
+    if (words > MAX_SENTENCE_WORDS) {
+      for (let t = s.t0; t < s.t1; t += 40) {
+        const t1 = Math.min(s.t1, t + 40);
+        const start = tokens[t].start;
+        const end = t1 === s.t1 ? s.end : tokens[t1 - 1].end;
+        out.push({ text: text.slice(start, end), start, end, words: t1 - t });
+      }
+      continue;
+    }
     // Include the closing punctuation/quotes in the sentence
     let end = s.end;
     while (end < text.length && /[.!?。！？।॥'"”’)\]]/.test(text[end])) end++;
@@ -160,8 +172,23 @@ function splitSentences(text: string): Sent[] {
   return out;
 }
 
+function percentShares(counts: number[]): number[] {
+  const total = counts.reduce((a, b) => a + b, 0);
+  if (!total) return counts.map((_, i) => (i === counts.length - 1 ? 100 : 0));
+  const exact = counts.map(c => (c / total) * 100);
+  const out = exact.map(Math.floor);
+  let rest = 100 - out.reduce((a, b) => a + b, 0);
+  const order = exact.map((_, i) => i).sort((a, b) => exact[b] - out[b] - (exact[a] - out[a]));
+  for (const i of order) {
+    if (rest-- <= 0) break;
+    out[i]++;
+  }
+  return out;
+}
+
 function documentStats(text: string, sents: Sent[]) {
-  const words = (text.toLowerCase().match(/[\p{L}\p{M}\p{N}']+/gu) || []).filter(w => w.length >= 2);
+  // Same tokenizer as everywhere else (splits Chinese/Japanese/Thai into words)
+  const words = tokenize(text).map(t => t.w).filter(w => w.length >= 2 || /[^\p{Script=Latin}\p{N}]/u.test(w));
   const total = words.length || 1;
   const freq = new Map<string, number>();
   for (const w of words) freq.set(w, (freq.get(w) || 0) + 1);
@@ -300,11 +327,8 @@ export async function detectAiText(
   });
 
   const wordsBy = (labels: AiLabel[]) => sentences.filter(s => labels.includes(s.label)).reduce((a, s) => a + s.words, 0);
-  const share = (w: number) => (analyzedWords ? Math.round((w / analyzedWords) * 100) : 0);
-  const aiGen = share(wordsBy(['ai']));
-  const aiRef = share(wordsBy(['ai_refined']));
-  const humRef = share(wordsBy(['human_refined']));
-  const human = Math.max(0, 100 - aiGen - aiRef - humRef);
+  // Largest-remainder rounding: the four shares always add up to exactly 100
+  const [aiGen, aiRef, humRef, human] = percentShares([wordsBy(['ai']), wordsBy(['ai_refined']), wordsBy(['human_refined']), wordsBy(['human'])]);
   const aiPercentage = Math.min(100, aiGen + aiRef);
 
   const aiPhraseCount = stats.reduce((a, s) => a + s.tells.length, 0);
